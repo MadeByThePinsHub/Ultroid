@@ -22,7 +22,7 @@ from . import *
     pattern="github (.*)",
 )
 async def gitsearch(event):
-    xx = await eor(event, "`Searching...`")
+    xx = await eor(event, get_string("com_2"))
     try:
         usrname = event.pattern_match.group(1)
     except BaseException:
@@ -67,4 +67,4 @@ async def gitsearch(event):
     )
 
 
-HELP.update({f"{__name__.split('.')[1]}": f"{__doc__.format(i=Var.HNDLR)}"})
+HELP.update({f"{__name__.split('.')[1]}": f"{__doc__.format(i=HNDLR)}"})

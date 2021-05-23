@@ -19,6 +19,8 @@ from telethon.tl.types import UserStatusOffline as off
 from telethon.tl.types import UserStatusOnline as on
 from telethon.tl.types import UserStatusRecently as rec
 
+from . import *
+
 snap = {}
 buddhhu = []
 
@@ -35,23 +37,19 @@ async def _(e):
         except ValueError as ex:
             return await eor(e, str(ex))
         except AttributeError:
-            return await eor(e, "No username of replied user wad found")
+            return await eor(e, "No username of replied user was found.")
     else:
         put = e.pattern_match.group(1)
     if put:
         try:
-            results = await ultroid_bot.inline_query(Var.BOT_USERNAME, f"msg {put}")
+            results = await ultroid_bot.inline_query(asst.me.username, f"msg {put}")
         except rep:
             return await eor(
                 e,
-                "`The bot did not respond to the inline query.\nConsider using {}restart`".format(
-                    Var.HNDLR
-                ),
+                get_string("help_2").format(HNDLR),
             )
         except dis:
-            return await eor(
-                e, "`Please turn on inline mode for your bot from` @Botfather."
-            )
+            return await eor(e, get_string("help_3"))
         await results[0].click(e.chat_id, reply_to=e.reply_to_msg_id, hide_via=True)
         await e.delete()
     else:
@@ -101,7 +99,9 @@ async def _(e):
             button = [
                 Button.url("Private", url=f"t.me/{username}"),
                 Button.switch_inline(
-                    "Secret msg", query=f"msg {query} wspr ", same_peer=True
+                    "Secret msg",
+                    query=f"msg {query} wspr Hello 👋",
+                    same_peer=True,
                 ),
             ]
             sur = e.builder.article(
@@ -123,10 +123,11 @@ async def _(e):
                 Button.inline("Secret Msg", data=f"dd_{logi.id}"),
                 Button.inline("Delete Msg", data=f"del"),
             ]
+            us = logi.username
             sur = e.builder.article(
                 title=f"{logi.first_name}",
                 description=desc,
-                text=f"@{logi.username} secret msg for you.\nDelete your msg after reading.\nOr the next msg will not be updated.",
+                text=get_string("wspr_1").format(us),
                 buttons=button,
             )
             buddhhu.append(meme)
@@ -134,7 +135,8 @@ async def _(e):
             snap.update({logi.id: desc})
         except ValueError:
             sur = e.builder.article(
-                title="Type ur msg", text=f"You Didn't Type Your Msg"
+                title="Type ur msg",
+                text=f"You Didn't Type Your Msg",
             )
     await e.answer([sur])
 
@@ -162,7 +164,7 @@ async def _(e):
             except KeyError:
                 pass
             try:
-                await e.edit("Msg deleted")
+                await e.edit(get_string("wspr_2"))
             except np:
                 pass
     else:
