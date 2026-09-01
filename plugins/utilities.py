@@ -1,38 +1,24 @@
 # Ultroid - UserBot
-# Copyright (C) 2020 TeamUltroid
+# Copyright (C) 2021-2026 TeamUltroid
 #
 # This file is a part of < https://github.com/TeamUltroid/Ultroid/ >
 # PLease read the GNU Affero General Public License in
 # <https://www.github.com/TeamUltroid/Ultroid/blob/main/LICENSE/>.
-
 """
 ✘ Commands Available -
 
-• `{i}kickme`
-    Leaves the group in which it is used.
+• `{i}kickme` : Leaves the group.
 
-• `{i}calc <equation>`
-    A simple calculator.
-
-• `{i}date`
-    Show Calender.
-
-• `{i}chatinfo`
-    Get full info about the group/chat.
+• `{i}date` : Show Calender.
 
 • `{i}listreserved`
     List all usernames (channels/groups) you own.
 
-• `{i}stats`
-    See your profile stats.
+• `{i}stats` : See your profile stats.
 
-• `{i}paste`
-    Include long text / Reply to text file.
+• `{i}paste` - `Include long text / Reply to text file.`
 
-• `{i}hastebin`
-    Include long text / Reply to text file.
-
-• `{i}info <username/userid>`
+• `{i}info <username/userid/chatid>`
     Reply to someone's msg.
 
 • `{i}invite <username/userid>`
@@ -46,143 +32,132 @@
 
 • `{i}json <reply to msg>`
     Get the json encoding of the message.
+
+• `{i}suggest <reply to message> or <poll title>`
+    Create a Yes/No poll for the replied suggestion.
+
+• `{i}ipinfo <ipAddress>` : Get info about that IP address.
+
+• `{i}cpy <reply to message>`
+   Copy the replied message, with formatting. Expires in 24hrs.
+• `{i}pst`
+   Paste the copied message, with formatting.
+
+• `{i}thumb <reply file>` : Download the thumbnail of the replied file.
+
+• `{i}getmsg <message link>`
+  Get messages from chats with forward/copy restrictions.
 """
+
 import asyncio
 import calendar
 import html
 import io
 import os
-import sys
+import pathlib
 import time
-import traceback
 from datetime import datetime as dt
 
-import pytz
-import requests
-from telegraph import Telegraph
-from telegraph import upload_file as uf
-from telethon import functions
-from telethon.errors.rpcerrorlist import BotInlineDisabledError, BotResponseTimeoutError
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+
+from pyUltroid._misc._assistant import asst_cmd
+from pyUltroid.dB.gban_mute_db import is_gbanned
+from pyUltroid.fns.tools import get_chat_and_msgid
+
+from . import upload_file as uf
+
+from telethon.errors.rpcerrorlist import ChatForwardsRestrictedError, UserBotError
+from telethon.errors import MessageTooLongError
 from telethon.events import NewMessage
 from telethon.tl.custom import Dialog
-from telethon.tl.functions.channels import LeaveChannelRequest
-from telethon.tl.functions.photos import GetUserPhotosRequest
-from telethon.tl.types import Channel, Chat, User
-from telethon.utils import get_input_location
+from telethon.tl.functions.channels import (
+    GetAdminedPublicChannelsRequest,
+    InviteToChannelRequest,
+    LeaveChannelRequest,
+)
+from telethon.tl.functions.contacts import GetBlockedRequest
+from telethon.tl.functions.messages import AddChatUserRequest, GetAllStickersRequest
+from telethon.tl.functions.users import GetFullUserRequest
+from telethon.tl.types import (
+    Channel,
+    Chat,
+    InputMediaPoll,
+    Poll,
+    PollAnswer,
+    TLObject,
+    User,
+    UserStatusOffline,
+    UserStatusOnline,
+    MessageMediaPhoto,
+    MessageMediaDocument,
+    DocumentAttributeVideo,
+)
+from telethon.utils import get_peer_id
+
+from pyUltroid.fns.info import get_chat_info
+
+from . import (
+    HNDLR,
+    LOGS,
+    Image,
+    ReTrieveFile,
+    Telegraph,
+    asst,
+    async_searcher,
+    bash,
+    check_filename,
+    eod,
+    eor,
+    get_paste,
+    get_string,
+    inline_mention,
+    json_parser,
+    mediainfo,
+    udB,
+    ultroid_cmd,
+)
 
 # =================================================================#
-from . import *
 
 TMP_DOWNLOAD_DIRECTORY = "resources/downloads/"
 
-# Telegraph Things
-telegraph = Telegraph()
-telegraph.create_account(short_name="Ultroid")
-# ================================================================#
+CAPTION_LIMIT = 1024  # Telegram's caption character limit for non-premium
+
+_copied_msg = {}
 
 
-@ultroid_cmd(
-    pattern="kickme$",
-    groups_only=True,
-)
+@ultroid_cmd(pattern="kickme$", fullsudo=True)
 async def leave(ult):
-    x = ultroid_bot.me
-    name = x.first_name
-    await eor(ult, f"`{name} has left this group, bye!!.`")
-    await ultroid_bot(LeaveChannelRequest(ult.chat_id))
+    await ult.eor(f"`{ult.client.me.first_name} has left this group, bye!!.`")
+    await ult.client(LeaveChannelRequest(ult.chat_id))
 
 
 @ultroid_cmd(
     pattern="date$",
 )
 async def date(event):
-    k = pytz.timezone("Asia/Kolkata")
-    m = dt.now(k).month
-    y = dt.now(k).year
-    d = dt.now(k).strftime("Date - %B %d, %Y\nTime- %H:%M:%S")
+    m = dt.now().month
+    y = dt.now().year
+    d = dt.now().strftime("Date - %B %d, %Y\nTime- %H:%M:%S")
     k = calendar.month(y, m)
-    ultroid = await eor(event, f"`{k}\n\n{d}`")
-
-
-@ultroid_cmd(
-    pattern="calc",
-)
-async def _(event):
-    x = await eor(event, "...")
-    cmd = event.text.split(" ", maxsplit=1)[1]
-    event.message.id
-    if event.reply_to_msg_id:
-        event.reply_to_msg_id
-    wtf = f"print({cmd})"
-    old_stderr = sys.stderr
-    old_stdout = sys.stdout
-    redirected_output = sys.stdout = io.StringIO()
-    redirected_error = sys.stderr = io.StringIO()
-    stdout, stderr, exc = None, None, None
-    try:
-        await aexec(wtf, event)
-    except Exception:
-        exc = traceback.format_exc()
-    stdout = redirected_output.getvalue()
-    stderr = redirected_error.getvalue()
-    sys.stdout = old_stdout
-    sys.stderr = old_stderr
-    evaluation = ""
-    if exc:
-        evaluation = exc
-    elif stderr:
-        evaluation = stderr
-    elif stdout:
-        evaluation = stdout
-    else:
-        evaluation = "`Something went wrong`"
-
-    final_output = """
-**EQUATION**:
-`{}`
-**SOLUTION**:
-`{}`
-""".format(
-        cmd, evaluation
-    )
-    await x.edit(final_output)
-
-
-async def aexec(code, event):
-    exec(f"async def __aexec(event): " + "".join(f"\n {l}" for l in code.split("\n")))
-    return await locals()["__aexec"](event)
-
-
-@ultroid_cmd(
-    pattern="chatinfo(?: |$)(.*)",
-)
-async def info(event):
-    ok = await eor(event, "`...`")
-    chat = await get_chatinfo(event)
-    caption = await fetch_info(chat, event)
-    try:
-        await ok.edit(caption, parse_mode="html")
-    except Exception as e:
-        print("Exception:", e)
-        await ok.edit(f"`An unexpected error has occurred. {e}`")
-        await asyncio.sleep(5)
-        await ok.delete()
-    return
+    await event.eor(f"`{k}\n\n{d}`")
 
 
 @ultroid_cmd(
     pattern="listreserved$",
 )
 async def _(event):
-    result = await ultroid_bot(functions.channels.GetAdminedPublicChannelsRequest())
-    output_str = ""
-    r = result.chats
-    for channel_obj in r:
-        output_str += f"- {channel_obj.title} @{channel_obj.username} \n"
-    if not r:
-        await eor(event, "`Not username Reserved`")
-    else:
-        await eor(event, output_str)
+    result = await event.client(GetAdminedPublicChannelsRequest())
+    if not result.chats:
+        return await event.eor("`No username Reserved`")
+    output_str = "".join(
+        f"- {channel_obj.title} @{channel_obj.username} \n"
+        for channel_obj in result.chats
+    )
+    await event.eor(output_str)
 
 
 @ultroid_cmd(
@@ -190,8 +165,8 @@ async def _(event):
 )
 async def stats(
     event: NewMessage.Event,
-) -> None:
-    ok = await eor(event, "`Collecting stats...`")
+):
+    ok = await event.eor("`Collecting stats...`")
     start_time = time.time()
     private_chats = 0
     bots = 0
@@ -204,41 +179,49 @@ async def stats(
     unread_mentions = 0
     unread = 0
     dialog: Dialog
-    async for dialog in ultroid_bot.iter_dialogs():
+    async for dialog in event.client.iter_dialogs():
         entity = dialog.entity
-        if isinstance(entity, Channel):
-            if entity.broadcast:
-                broadcast_channels += 1
-                if entity.creator or entity.admin_rights:
-                    admin_in_broadcast_channels += 1
-                if entity.creator:
-                    creator_in_channels += 1
+        if isinstance(entity, Channel) and entity.broadcast:
+            broadcast_channels += 1
+            if entity.creator or entity.admin_rights:
+                admin_in_broadcast_channels += 1
+            if entity.creator:
+                creator_in_channels += 1
 
-            elif entity.megagroup:
-                groups += 1
-                if entity.creator or entity.admin_rights:
-                    admin_in_groups += 1
-                if entity.creator:
-                    creator_in_groups += 1
-
-        elif isinstance(entity, User):
-            private_chats += 1
-            if entity.bot:
-                bots += 1
-
-        elif isinstance(entity, Chat):
+        elif (isinstance(entity, Channel) and entity.megagroup) or isinstance(
+            entity, Chat
+        ):
             groups += 1
             if entity.creator or entity.admin_rights:
                 admin_in_groups += 1
             if entity.creator:
                 creator_in_groups += 1
 
+        elif isinstance(entity, User):
+            private_chats += 1
+            if entity.bot:
+                bots += 1
+
         unread_mentions += dialog.unread_mentions_count
         unread += dialog.unread_count
     stop_time = time.time() - start_time
-
-    full_name = inline_mention(await ultroid_bot.get_me())
-    response = f"🔸 **Stats for {full_name}** \n\n"
+    try:
+        ct = (await event.client(GetBlockedRequest(1, 0))).count
+    except AttributeError:
+        ct = 0
+    try:
+        sp = await event.client(GetAllStickersRequest(0))
+        sp_count = len(sp.sets)
+    except BaseException:
+        sp_count = 0
+    me = event.client.me
+    full_name = inline_mention(me)
+    username_line = (
+        f" (`@{me.username}` | [Profile](https://t.me/{me.username}))"
+        if me.username
+        else f" (`ID: {me.id}`)"
+    )
+    response = f"🔸 **Stats for {full_name}**{username_line}\n\n"
     response += f"**Private Chats:** {private_chats} \n"
     response += f"**  •• **`Users: {private_chats - bots}` \n"
     response += f"**  •• **`Bots: {bots}` \n"
@@ -251,20 +234,23 @@ async def stats(
     response += f"**  •• **`Creator: {creator_in_channels}` \n"
     response += f"**  •• **`Admin Rights: {admin_in_broadcast_channels - creator_in_channels}` \n"
     response += f"**Unread:** {unread} \n"
-    response += f"**Unread Mentions:** {unread_mentions} \n\n"
+    response += f"**Unread Mentions:** {unread_mentions} \n"
+    response += f"**Blocked Users:** {ct}\n"
+    response += f"**Total Stickers Pack Installed :** `{sp_count}`\n\n"
     response += f"**__It Took:__** {stop_time:.02f}s \n"
     await ok.edit(response)
 
 
-@ultroid_cmd(
-    pattern="paste( (.*)|$)",
-)
+@ultroid_cmd(pattern="paste( (.*)|$)", manager=True, allow_all=True)
 async def _(event):
-    xx = await eor(event, "`...`")
-    input_str = "".join(event.text.split(maxsplit=1)[1:])
+    try:
+        input_str = event.text.split(maxsplit=1)[1]
+    except IndexError:
+        input_str = None
+    xx = await event.eor("` 《 Pasting... 》 `")
+    downloaded_file_name = None
     if input_str:
         message = input_str
-        downloaded_file_name = None
     elif event.reply_to_msg_id:
         previous_message = await event.get_reply_message()
         if previous_message.media:
@@ -272,150 +258,129 @@ async def _(event):
                 previous_message,
                 "./resources/downloads",
             )
-            m_list = None
-            with open(downloaded_file_name, "rb") as fd:
-                m_list = fd.readlines()
-            message = ""
-            try:
-                for m in m_list:
-                    message += m.decode("UTF-8")
-            except BaseException:
-                message = "`Include long text / Reply to text file`"
+            with open(downloaded_file_name, "r") as fd:
+                message = fd.read()
             os.remove(downloaded_file_name)
         else:
-            downloaded_file_name = None
             message = previous_message.message
     else:
-        downloaded_file_name = None
-        message = "`Include long text / Reply to text file`"
-    if downloaded_file_name and downloaded_file_name.endswith(".py"):
-        data = message
-        key = (
-            requests.post("https://nekobin.com/api/documents", json={"content": data})
-            .json()
-            .get("result")
-            .get("key")
+        message = None
+    if not message:
+        return await xx.eor(
+            "`Reply to a Message/Document or Give me Some Text !`", time=5
         )
-    else:
-        data = message
-        key = (
-            requests.post("https://nekobin.com/api/documents", json={"content": data})
-            .json()
-            .get("result")
-            .get("key")
-        )
-    q = f"paste-{key}"
+    done, data = await get_paste(message)
+    if not done and data.get("error"):
+        return await xx.eor(data["error"])
+    reply_text = (
+        f"• **Pasted to SpaceBin :** [Space]({data['link']})\n• **Raw Url :** : [Raw]({data['raw']})"
+    )
     try:
-        ok = await ultroid_bot.inline_query(Var.BOT_USERNAME, q)
+        if event.client._bot:
+            return await xx.eor(reply_text)
+        ok = await event.client.inline_query(asst.me.username, f"pasta-{data['link']}")
         await ok[0].click(event.chat_id, reply_to=event.reply_to_msg_id, hide_via=True)
         await xx.delete()
-    except BotInlineDisabledError or BotResponseTimeoutError:  # incase the bot doesnt respond
+    except BaseException as e:
+        LOGS.exception(e)
         await xx.edit(reply_text)
 
 
 @ultroid_cmd(
-    pattern="hastebin ?(.*)",
+    pattern="info( (.*)|$)",
+    manager=True,
 )
 async def _(event):
-    input_str = event.pattern_match.group(1)
-    xx = await eor(event, "`Pasting...`")
-    message = "SYNTAX: `.paste <long text to include>`"
-    if input_str:
-        message = input_str
-    elif event.reply_to_msg_id:
-        previous_message = await event.get_reply_message()
-        if previous_message.media:
-            downloaded_file_name = await event.client.download_media(
-                previous_message,
-                "./resources/downloads",
-            )
-            m_list = None
-            with open(downloaded_file_name, "rb") as fd:
-                m_list = fd.readlines()
-            message = ""
-            for m in m_list:
-                message += m.decode("UTF-8") + "\r\n"
-            os.remove(downloaded_file_name)
-        else:
-            message = previous_message.message
+    if match := event.pattern_match.group(1).strip():
+        try:
+            user = await event.client.parse_id(match)
+        except Exception as er:
+            return await event.eor(str(er))
+    elif event.is_reply:
+        rpl = await event.get_reply_message()
+        user = rpl.sender_id
     else:
-        message = "SYNTAX: `.hastebin <long text to include>`"
-    url = "https://hastebin.com/documents"
-    r = requests.post(url, data=message).json()
-    url = f"https://hastebin.com/{r['key']}"
-    await xx.edit("**Pasted to Hastebin** : [Link]({})".format(url))
-
-
-@ultroid_cmd(
-    pattern="info ?(.*)",
-)
-async def _(event):
-    xx = await eor(event, "`Processing...`")
-    replied_user, error_i_a = await get_full_user(event)
-    if replied_user is None:
-        await xx.edit("Please reply to a user.\nError - " + str(error_i_a))
-        return False
-    replied_user_profile_photos = await event.client(
-        GetUserPhotosRequest(
-            user_id=replied_user.user.id, offset=42, max_id=0, limit=80
-        )
-    )
-    replied_user_profile_photos_count = "NaN"
+        user = event.chat_id
+    xx = await event.eor(get_string("com_1"))
     try:
-        replied_user_profile_photos_count = replied_user_profile_photos.count
-    except AttributeError:
-        pass
-    user_id = replied_user.user.id
-    first_name = html.escape(replied_user.user.first_name)
+        _ = await event.client.get_entity(user)
+    except Exception as er:
+        return await xx.edit(f"**ERROR :** {er}")
+    if not isinstance(_, User):
+        try:
+            peer = get_peer_id(_)
+            photo, capt = await get_chat_info(_, event)
+            if is_gbanned(peer):
+                capt += "\n•<b> Is Gbanned:</b> <code>True</code>"
+            if not photo:
+                return await xx.eor(capt, parse_mode="html")
+            await event.client.send_message(
+                event.chat_id, capt[:1024], file=photo, parse_mode="html"
+            )
+            await xx.delete()
+        except Exception as er:
+            await event.eor("**ERROR ON CHATINFO**\n" + str(er))
+        return
+    try:
+        full_user = (await event.client(GetFullUserRequest(user))).full_user
+    except Exception as er:
+        return await xx.edit(f"ERROR : {er}")
+    user = _
+    user_photos = (
+        await event.client.get_profile_photos(user.id, limit=0)
+    ).total or "NaN"
+    user_id = user.id
+    first_name = html.escape(user.first_name)
     if first_name is not None:
         first_name = first_name.replace("\u2060", "")
-    last_name = replied_user.user.last_name
+    last_name = user.last_name
     last_name = (
         last_name.replace("\u2060", "") if last_name else ("Last Name not found")
     )
-    user_bio = replied_user.about
+    user_bio = full_user.about
     if user_bio is not None:
-        user_bio = html.escape(replied_user.about)
-    common_chats = replied_user.common_chats_count
-    try:
-        dc_id, location = get_input_location(replied_user.profile_photo)
-    except Exception as e:
+        user_bio = html.escape(full_user.about)
+    common_chats = full_user.common_chats_count
+    if user.photo:
+        dc_id = user.photo.dc_id
+    else:
         dc_id = "Need a Profile Picture to check this"
-        str(e)
-    caption = """<b>Exᴛʀᴀᴄᴛᴇᴅ Dᴀᴛᴀʙᴀsᴇ Fʀᴏᴍ Tᴇʟᴇɢʀᴀᴍ's Dᴀᴛᴀʙᴀsᴇ<b>
-    <b>••Tᴇʟᴇɢʀᴀᴍ ID</b>: <code>{}</code>
-    <b>••Pᴇʀᴍᴀɴᴇɴᴛ Lɪɴᴋ</b>: <a href='tg://user?id={}'>Click Here</a>
-    <b>••Fɪʀsᴛ Nᴀᴍᴇ</b>: <code>{}</code>
-    <b>••Sᴇᴄᴏɴᴅ Nᴀᴍᴇ</b>: <code>{}</code>
-    <b>••Bɪᴏ</b>: <code>{}</code>
-    <b>••Dᴄ ID</b>: <code>{}</code>
-    <b>••Nᴏ. Oғ PғPs</b> : <code>{}</code>
-    <b>••Is Rᴇsᴛʀɪᴄᴛᴇᴅ</b>: <code>{}</code>
-    <b>••Vᴇʀɪғɪᴇᴅ</b>: <code>{}</code>
-    <b>••Is A Bᴏᴛ</b>: <code>{}</code>
-    <b>••Gʀᴏᴜᴘs Iɴ Cᴏᴍᴍᴏɴ</b>: <code>{}</code>
-    """.format(
+    caption = """<b>Extracted Data From Telegram's Database</b>
+<b>• Telegram ID</b>: <code>{}</code>
+<b>• Permanent Link</b>: <a href='tg://user?id={}'>Click Here</a>
+<b>• First Name</b>: <code>{}</code>
+<b>• Last Name</b>: <code>{}</code>
+<b>• Bio</b>: <code>{}</code>
+<b>• DC ID</b>: <code>{}</code>
+<b>• Number of Profile Pictures</b>: <code>{}</code>
+<b>• Is Restricted</b>: <code>{}</code>
+<b>• Verified</b>: <code>{}</code>
+<b>• Is Premium</b>: <code>{}</code>
+<b>• Is A Bot</b>: <code>{}</code>
+<b>• Groups In Common</b>: <code>{}</code>
+""".format(
         user_id,
         user_id,
         first_name,
         last_name,
         user_bio,
         dc_id,
-        replied_user_profile_photos_count,
-        replied_user.user.restricted,
-        replied_user.user.verified,
-        replied_user.user.bot,
+        user_photos,
+        user.restricted,
+        user.verified,
+        user.premium,
+        user.bot,
         common_chats,
     )
-    message_id_to_reply = event.message.reply_to_msg_id
-    if not message_id_to_reply:
-        message_id_to_reply = event.message.id
+    if chk := is_gbanned(user_id):
+        caption += f"""<b>••Gʟᴏʙᴀʟʟʏ Bᴀɴɴᴇᴅ</b>: <code>True</code>
+<b>••Rᴇᴀsᴏɴ</b>: <code>{chk}</code>"""
     await event.client.send_message(
         event.chat_id,
         caption,
-        reply_to=message_id_to_reply,
+        reply_to=event.reply_to_msg_id,
         parse_mode="HTML",
-        file=replied_user.profile_photo,
+        file=full_user.profile_photo,
         force_document=False,
         silent=True,
     )
@@ -423,19 +388,21 @@ async def _(event):
 
 
 @ultroid_cmd(
-    pattern="invite ?(.*)",
+    pattern="invite( (.*)|$)",
     groups_only=True,
 )
 async def _(ult):
-    xx = await eor(ult, "`Processing...`")
-    to_add_users = ult.pattern_match.group(1)
+    xx = await ult.eor(get_string("com_1"))
+    to_add_users = ult.pattern_match.group(1).strip()
     if not ult.is_channel and ult.is_group:
         for user_id in to_add_users.split(" "):
             try:
-                await ultroid_bot(
-                    functions.messages.AddChatUserRequest(
-                        chat_id=ult.chat_id, user_id=user_id, fwd_limit=1000000
-                    )
+                await ult.client(
+                    AddChatUserRequest(
+                        chat_id=ult.chat_id,
+                        user_id=await ult.client.parse_id(user_id),
+                        fwd_limit=1000000,
+                    ),
                 )
                 await xx.edit(f"Successfully invited `{user_id}` to `{ult.chat_id}`")
             except Exception as e:
@@ -443,132 +410,153 @@ async def _(ult):
     else:
         for user_id in to_add_users.split(" "):
             try:
-                await ultroid_bot(
-                    functions.channels.InviteToChannelRequest(
-                        channel=ult.chat_id, users=[user_id]
-                    )
+                await ult.client(
+                    InviteToChannelRequest(
+                        channel=ult.chat_id,
+                        users=[await ult.client.parse_id(user_id)],
+                    ),
                 )
                 await xx.edit(f"Successfully invited `{user_id}` to `{ult.chat_id}`")
+            except UserBotError:
+                await xx.edit(
+                    f"Bots can only be added as Admins in Channel.\nBetter Use `{HNDLR}promote {user_id}`"
+                )
             except Exception as e:
                 await xx.edit(str(e))
 
 
 @ultroid_cmd(
-    pattern=r"rmbg ?(.*)",
+    pattern="rmbg($| (.*))",
 )
-async def rmbg(event):
-    RMBG_API = udB.get("RMBG_API")
-    xx = await eor(event, "`Processing...`")
+async def abs_rmbg(event):
+    RMBG_API = udB.get_key("RMBG_API")
     if not RMBG_API:
-        return await xx.edit(
+        return await event.eor(
             "Get your API key from [here](https://www.remove.bg/) for this plugin to work.",
         )
-    input_str = event.pattern_match.group(1)
-    message_id = event.message.id
-    if event.reply_to_msg_id:
-        message_id = event.reply_to_msg_id
-        reply_message = await event.get_reply_message()
-        try:
-            dl_file = await ultroid_bot.download_media(
-                reply_message, TMP_DOWNLOAD_DIRECTORY
-            )
-        except Exception as e:
-            return await xx.edit("**ERROR:**\n`{}`".format(str(e)))
+    match = event.pattern_match.group(1).strip()
+    reply = await event.get_reply_message()
+    if match and os.path.exists(match):
+        dl = match
+    elif reply and reply.media:
+        if reply.document and reply.document.thumbs:
+            dl = await reply.download_media(thumb=-1)
         else:
-            await xx.edit("`Sending to remove.bg`")
-            output_file_name = ReTrieveFile(dl_file)
-            os.remove(dl_file)
-    elif input_str:
-        await xx.edit("`Sending to remove.bg`")
-        output_file_name = ReTrieveURL(input_str)
+            dl = await reply.download_media()
     else:
-        await xx.edit(
-            f"Use `{Var.HNDLR}rmbg` as reply to a pic to remove its background."
+        return await eod(
+            event, f"Use `{HNDLR}rmbg` as reply to a pic to remove its background."
         )
-        await asyncio.sleep(5)
-        await xx.delete()
-        return
-    contentType = output_file_name.headers.get("content-type")
-    if "image" in contentType:
-        with io.BytesIO(output_file_name.content) as remove_bg_image:
-            remove_bg_image.name = "rmbg-ult.png"
-            await ultroid_bot.send_file(
-                event.chat_id,
-                remove_bg_image,
-                force_document=True,
-                supports_streaming=False,
-                allow_cache=False,
-                reply_to=message_id,
-            )
-        await xx.edit("`Done.`")
-    else:
-        await xx.edit(
-            "RemoveBG returned an error - \n`{}`".format(
-                output_file_name.content.decode("UTF-8")
-            ),
+    if not (dl and dl.endswith(("webp", "jpg", "png", "jpeg"))):
+        os.remove(dl)
+        return await event.eor(get_string("com_4"))
+    if dl.endswith("webp"):
+        file = f"{dl}.png"
+        Image.open(dl).save(file)
+        os.remove(dl)
+        dl = file
+    xx = await event.eor("`Sending to remove.bg`")
+    dn, out = await ReTrieveFile(dl)
+    os.remove(dl)
+    if not dn:
+        dr = out["errors"][0]
+        de = dr.get("detail", "")
+        return await xx.edit(
+            f"**ERROR ~** `{dr['title']}`,\n`{de}`",
         )
+    zz = Image.open(out)
+    if zz.mode != "RGB":
+        zz.convert("RGB")
+    wbn = check_filename("ult-rmbg.webp")
+    zz.save(wbn, "webp")
+    await event.client.send_file(
+        event.chat_id,
+        out,
+        force_document=True,
+        reply_to=reply,
+    )
+    await event.client.send_file(event.chat_id, wbn, reply_to=reply)
+    os.remove(out)
+    os.remove(wbn)
+    await xx.delete()
 
 
 @ultroid_cmd(
-    pattern="telegraph ?(.*)",
+    pattern="telegraph( (.*)|$)",
 )
 async def telegraphcmd(event):
-    input_str = event.pattern_match.group(1)
-    xx = await eor(event, "`Processing...`")
-    if event.reply_to_msg_id:
-        getmsg = await event.get_reply_message()
-        if getmsg.photo or getmsg.video or getmsg.gif:
-            getit = await ultroid_bot.download_media(getmsg)
+    xx = await event.eor(get_string("com_1"))
+    match = event.pattern_match.group(1).strip() or "Ultroid"
+    reply = await event.get_reply_message()
+    if not reply:
+        return await xx.eor("`Reply to Message.`")
+    if not reply.media and reply.message:
+        content = reply.message
+    else:
+        getit = await reply.download_media()
+        dar = mediainfo(reply.media)
+        if dar == "sticker":
+            file = f"{getit}.png"
+            Image.open(getit).save(file)
+            os.remove(getit)
+            getit = file
+        elif dar.endswith("animated"):
+            file = f"{getit}.gif"
+            await bash(f"lottie_convert.py '{getit}' {file}")
+            os.remove(getit)
+            getit = file
+        if "document" not in dar:
             try:
-                variable = uf(getit)
-                os.remove(getit)
-                nn = "https://telegra.ph" + variable[0]
+                nn = uf(getit)
                 amsg = f"Uploaded to [Telegraph]({nn}) !"
             except Exception as e:
-                amsg = f"Error - {e}"
-            await xx.edit(amsg)
-        elif getmsg.document:
-            getit = await ultroid_bot.download_media(getmsg)
-            ab = open(getit, "r")
-            cd = ab.read()
-            ab.close()
-            if input_str:
-                tcom = input_str
-            else:
-                tcom = "Ultroid"
-            makeit = telegraph.create_page(title=tcom, content=[f"{cd}"])
-            war = makeit["url"]
+                amsg = f"Error : {e}"
             os.remove(getit)
-            await xx.edit(f"Pasted to Telegraph : [Telegraph]({war})")
-        elif getmsg.text:
-            if input_str:
-                tcom = input_str
-            else:
-                tcom = "Ultroid"
-            makeit = telegraph.create_page(title=tcom, content=[f"{getmsg.text}"])
-            war = makeit["url"]
-            await xx.edit(f"Pasted to Telegraph : [Telegraph]({war})")
-        else:
-            await xx.edit("Reply to a Media or Text !")
-    else:
-        await xx.edit("Reply to a Message !")
+            return await xx.eor(amsg)
+        content = pathlib.Path(getit).read_text()
+        os.remove(getit)
+    makeit = Telegraph.create_page(title=match, content=[content])
+    await xx.eor(
+        f"Pasted to Telegraph : [Telegraph]({makeit['url']})", link_preview=False
+    )
 
 
-@ultroid_cmd(pattern="json")
+@ultroid_cmd(pattern="json( (.*)|$)")
 async def _(event):
-    the_real_message = None
     reply_to_id = None
+    match = event.pattern_match.group(1).strip()
     if event.reply_to_msg_id:
-        previous_message = await event.get_reply_message()
-        the_real_message = previous_message.stringify()
+        msg = await event.get_reply_message()
         reply_to_id = event.reply_to_msg_id
     else:
-        the_real_message = event.stringify()
+        msg = event
         reply_to_id = event.message.id
-    if len(the_real_message) > 4096:
-        with io.BytesIO(str.encode(the_real_message)) as out_file:
+    if match and hasattr(msg, match.split()[0]):
+        msg = getattr(msg, match.split()[0])
+        try:
+            if hasattr(msg, "to_json"):
+                msg = msg.to_json(ensure_ascii=False, indent=1)
+            elif hasattr(msg, "to_dict"):
+                msg = json_parser(msg.to_dict(), indent=1)
+            else:
+                msg = TLObject.stringify(msg)
+        except Exception:
+            pass
+        msg = str(msg)
+    else:
+        msg = json_parser(msg.to_json(), indent=1)
+    if "-t" in match:
+        try:
+            data = json_parser(msg)
+            msg = json_parser(
+                {key: data[key] for key in data.keys() if data[key]}, indent=1
+            )
+        except Exception:
+            pass
+    if len(msg) > 4096:
+        with io.BytesIO(str.encode(msg)) as out_file:
             out_file.name = "json-ult.txt"
-            await ultroid_bot.send_file(
+            await event.client.send_file(
                 event.chat_id,
                 out_file,
                 force_document=True,
@@ -577,7 +565,271 @@ async def _(event):
             )
             await event.delete()
     else:
-        await eor(event, f"```{the_real_message}```")
+        await event.eor(f"```{msg or None}```")
 
 
-HELP.update({f"{__name__.split('.')[1]}": f"{__doc__.format(i=Var.HNDLR)}"})
+@ultroid_cmd(pattern="suggest( (.*)|$)", manager=True)
+async def sugg(event):
+    sll = event.text.split(maxsplit=1)
+    try:
+        text = sll[1]
+    except IndexError:
+        text = None
+    if not (event.is_reply or text):
+        return await eod(
+            event,
+            "`Please reply to a message to make a suggestion poll!`",
+        )
+    if event.is_reply and not text:
+        reply = await event.get_reply_message()
+        if reply.text and len(reply.text) < 35:
+            text = reply.text
+        else:
+            text = "Do you Agree to Replied Suggestion ?"
+    reply_to = event.reply_to_msg_id if event.is_reply else event.id
+    try:
+        await event.client.send_file(
+            event.chat_id,
+            file=InputMediaPoll(
+                poll=Poll(
+                    id=12345,
+                    question=text,
+                    answers=[PollAnswer("Yes", b"1"), PollAnswer("No", b"2")],
+                ),
+            ),
+            reply_to=reply_to,
+        )
+    except Exception as e:
+        return await eod(event, f"`Oops, you can't send polls here!\n\n{e}`")
+    await event.delete()
+
+
+@ultroid_cmd(pattern="ipinfo( (.*)|$)")
+async def ipinfo(event):
+    ip = event.text.split()
+    ipaddr = ""
+    try:
+        ipaddr = f"/{ip[1]}"
+    except IndexError:
+        ipaddr = ""
+    det = await async_searcher(f"https://ipinfo.io{ipaddr}/geo", re_json=True)
+    try:
+        ip = det["ip"]
+        city = det["city"]
+        region = det["region"]
+        country = det["country"]
+        cord = det["loc"]
+        try:
+            zipc = det["postal"]
+        except KeyError:
+            zipc = "None"
+        tz = det["timezone"]
+        await eor(
+            event,
+            """
+**IP Details Fetched.**
+
+**IP:** `{}`
+**City:** `{}`
+**Region:** `{}`
+**Country:** `{}`
+**Co-ordinates:** `{}`
+**Postal Code:** `{}`
+**Time Zone:** `{}`
+""".format(
+                ip,
+                city,
+                region,
+                country,
+                cord,
+                zipc,
+                tz,
+            ),
+        )
+    except BaseException:
+        err = det["error"]["title"]
+        msg = det["error"]["message"]
+        await event.eor(f"ERROR:\n{err}\n{msg}", time=5)
+
+
+@ultroid_cmd(
+    pattern="cpy$",
+)
+async def copp(event):
+    msg = await event.get_reply_message()
+    if not msg:
+        return await event.eor(f"Use `{HNDLR}cpy` as reply to a message!", time=5)
+    _copied_msg["CLIPBOARD"] = msg
+    await event.eor(f"Copied. Use `{HNDLR}pst` to paste!", time=10)
+
+
+@asst_cmd(pattern="pst$")
+async def pepsodent(event):
+    await toothpaste(event)
+
+
+@ultroid_cmd(
+    pattern="pst$",
+)
+async def colgate(event):
+    await toothpaste(event)
+
+
+async def toothpaste(event):
+    try:
+        await event.respond(_copied_msg["CLIPBOARD"])
+    except KeyError:
+        return await eod(
+            event,
+            f"Nothing was copied! Use `{HNDLR}cpy` as reply to a message first!",
+        )
+    except Exception as ex:
+        return await event.eor(str(ex), time=5)
+    await event.delete()
+
+
+@ultroid_cmd(pattern="thumb$")
+async def thumb_dl(event):
+    reply = await event.get_reply_message()
+    if not (reply and reply.file):
+        return await eod(event, get_string("th_1"), time=5)
+    if not reply.file.media.thumbs:
+        return await eod(event, get_string("th_2"))
+    await event.eor(get_string("com_1"))
+    x = await event.get_reply_message()
+    m = await x.download_media(thumb=-1)
+    await event.reply(file=m)
+    os.remove(m)
+
+
+async def get_video_duration(file_path):
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        file_path,
+    ]
+    try:
+        result = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await result.communicate()
+        duration = float(stdout.decode().strip())
+        return duration
+    except Exception as e:
+        print("Error running ffprobe:", e)
+        return None
+
+async def get_thumbnail(file_path, thumbnail_path):
+    try:
+        await asyncio.create_subprocess_exec(
+            "ffmpeg",
+            "-i", file_path,
+            "-ss", "00:00:04",
+            "-vframes", "1",  # Extract a single frame as the thumbnail
+            thumbnail_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except Exception as e:
+        print(f"Error extracting thumbnail: {e}")
+
+@ultroid_cmd(pattern="getmsg( ?(.*)|$)")
+async def get_restricted_msg(event):
+    match = event.pattern_match.group(1).strip()
+    if not match:
+        await event.eor("`Please provide a link!`", time=5)
+        return
+    
+    xx = await event.eor("`Loading...`")
+    chat, msg = get_chat_and_msgid(match)
+    if not (chat and msg):
+        return await event.eor(
+            "Invalid link!\nExamples:\n"
+            "`https://t.me/TeamUltroid/3`\n"
+            "`https://t.me/c/1313492028/3`\n"
+            "`tg://openmessage?user_id=1234567890&message_id=1`"
+        )
+    
+    try:
+        input_entity = await event.client.get_input_entity(chat)
+        message = await event.client.get_messages(input_entity, ids=msg)
+    except BaseException as er:
+        return await event.eor(f"**ERROR**\n`{er}`")
+    
+    if not message:
+        return await event.eor("`Message not found or may not exist.`")
+    
+    try:
+        await event.client.send_message(event.chat_id, message)
+        await xx.try_delete()
+        return
+    except ChatForwardsRestrictedError:
+        pass
+    
+    if message.media:
+        if isinstance(message.media, (MessageMediaPhoto, MessageMediaDocument)):
+            media_path, _ = await event.client.fast_downloader(message.document, show_progress=True, event=xx, message=get_string("com_5"))
+
+            caption = message.text or ""
+
+            attributes = []
+            if message.video:
+                duration = await get_video_duration(media_path.name)
+                
+                width, height = 0, 0
+                for attribute in message.document.attributes:
+                    if isinstance(attribute, DocumentAttributeVideo):
+                        width = attribute.w
+                        height = attribute.h
+                        break
+                
+                thumb_path = media_path.name + "_thumb.jpg"
+                await get_thumbnail(media_path.name, thumb_path)
+
+                attributes.append(
+                    DocumentAttributeVideo(
+                        duration=int(duration) if duration else 0,
+                        w=width,
+                        h=height,
+                        supports_streaming=True,
+                    )
+                )
+            await xx.edit(get_string("com_6"))
+            media_path, _ = await event.client.fast_uploader(media_path.name, event=xx, show_progress=True, to_delete=True)
+
+            try:
+                await event.client.send_file(
+                    event.chat_id,
+                    media_path,
+                    caption=caption,
+                    force_document=False,
+                    supports_streaming=True if message.video else False,
+                    thumb=thumb_path if message.video else None,
+                    attributes=attributes if message.video else None,
+                )
+            except MessageTooLongError:
+                if len(caption) > CAPTION_LIMIT:
+                    caption = caption[:CAPTION_LIMIT] + "..."
+                await event.client.send_file(
+                    event.chat_id,
+                    media_path,
+                    caption=caption,
+                    force_document=False,  # Set to True if you want to send as a document
+                    supports_streaming=True if message.video else False,
+                    thumb=thumb_path if message.video else None,
+                    attributes=attributes if message.video else None,
+                )
+
+            if message.video and os.path.exists(thumb_path):
+                os.remove(thumb_path)
+            await xx.try_delete()
+        else:
+            await event.eor("`Cannot process this type of media.`")
+    else:
+        await event.eor("`No media found in the message.`")
+

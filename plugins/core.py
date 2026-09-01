@@ -1,177 +1,124 @@
 # Ultroid - UserBot
-# Copyright (C) 2020 TeamUltroid
+# Copyright (C) 2021-2026 TeamUltroid
 #
 # This file is a part of < https://github.com/TeamUltroid/Ultroid/ >
 # PLease read the GNU Affero General Public License in
 # <https://www.github.com/TeamUltroid/Ultroid/blob/main/LICENSE/>.
 
-"""
-✘ Commands Available -
 
-• `{i}install <reply to plugin>`
-    To install the plugin,
-   `{i}install f`
-    To force Install.
+from . import get_help
 
-• `{i}uninstall <plugin name>`
-    To unload and remove the plugin.
+__doc__ = get_help("help_core")
 
-• `{i}load <plugin name>`
-    To load unloaded unofficial plugin.
-
-• `{i}unload <plugin name>`
-    To unload unofficial plugin.
-
-• `{i}help <plugin name>`
-    Shows you a help menu (like this) for every plugin.
-"""
 
 import os
 
-from telethon import Button
+from pyUltroid.startup.loader import load_addons
 
-from . import *
-
-
-@in_pattern(
-    "send ?(.*)",
-)
-@in_owner
-async def inline_handler(event):
-    builder = event.builder
-    input_str = event.pattern_match.group(1)
-    plug = [*PLUGINS]
-    plugs = []
-    if input_str == None or input_str == "":
-        for i in plug:
-            try:
-                plugs.append(
-                    await event.builder.document(
-                        f"./plugins/{i}.py",
-                        title=f"{i}.py",
-                        description=f"Module Found",
-                        text=f"{i}.py use .paste to paste in neko and raw..",
-                        buttons=[
-                            [
-                                Button.switch_inline(
-                                    "Search Again..?", query="send ", same_peer=True
-                                )
-                            ]
-                        ],
-                    )
-                )
-            except BaseException:
-                pass
-        await event.answer(plugs)
-    else:
-        try:
-            ultroid = builder.document(
-                f"./plugins/{input_str}.py",
-                title=f"{input_str}.py",
-                description=f"Module {input_str} Found",
-                text=f"{input_str}.py use .paste to paste in neko and raw..",
-                buttons=[
-                    [
-                        Button.switch_inline(
-                            "Search Again..?", query="send ", same_peer=True
-                        )
-                    ]
-                ],
-            )
-            await event.answer([ultroid])
-            return
-        except BaseException:
-            ultroidcode = builder.article(
-                title=f"Module {input_str}.py Not Found",
-                description=f"No Such Module",
-                text=f"No Module Named {input_str}.py",
-                buttons=[
-                    [
-                        Button.switch_inline(
-                            "Search Again", query="send ", same_peer=True
-                        )
-                    ]
-                ],
-            )
-            await event.answer([ultroidcode])
-            return
+from . import LOGS, async_searcher, eod, get_string, safeinstall, ultroid_cmd, un_plug
 
 
-@ultroid_cmd(
-    pattern="install",
-)
+@ultroid_cmd(pattern="install", fullsudo=True)
 async def install(event):
     await safeinstall(event)
 
 
 @ultroid_cmd(
-    pattern=r"unload ?(.*)",
+    pattern=r"unload( (.*)|$)",
 )
 async def unload(event):
-    shortname = event.pattern_match.group(1)
+    shortname = event.pattern_match.group(1).strip()
     if not shortname:
-        await eor(event, "`Give name of plugin which u want to unload`")
+        await event.eor(get_string("core_9"))
         return
     lsd = os.listdir("addons")
-    lst = os.listdir("plugins")
-    zym = shortname + ".py"
+    zym = f"{shortname}.py"
     if zym in lsd:
         try:
             un_plug(shortname)
-            await eod(event, f"**Uɴʟᴏᴀᴅᴇᴅ** `{shortname}` **Sᴜᴄᴄᴇssғᴜʟʟʏ.**", time=3)
-        except BaseException:
-            pass
-    elif zym in lst:
-        return await eod(event, "**Yᴏᴜ Cᴀɴ'ᴛ Uɴʟᴏᴀᴅ Oғғɪᴄɪᴀʟ Pʟᴜɢɪɴs**", time=3)
+            await event.eor(f"**Uɴʟᴏᴀᴅᴇᴅ** `{shortname}` **Sᴜᴄᴄᴇssғᴜʟʟʏ.**", time=3)
+        except Exception as ex:
+            LOGS.exception(ex)
+            return await event.eor(str(ex))
+    elif zym in os.listdir("plugins"):
+        return await event.eor(get_string("core_11"), time=3)
     else:
-        return await eod(event, f"**Nᴏ Pʟᴜɢɪɴ Nᴀᴍᴇᴅ** `{shortname}`", time=3)
+        await event.eor(f"**No Plugin Named** `{shortname}`", time=3)
 
 
 @ultroid_cmd(
-    pattern=r"uninstall ?(.*)",
+    pattern=r"uninstall( (.*)|$)",
 )
 async def uninstall(event):
-    shortname = event.pattern_match.group(1)
+    shortname = event.pattern_match.group(1).strip()
     if not shortname:
-        await eor(event, "`Give name of plugin which u want to uninstall`")
+        await event.eor(get_string("core_13"))
         return
     lsd = os.listdir("addons")
-    lst = os.listdir("plugins")
-    zym = shortname + ".py"
+    zym = f"{shortname}.py"
     if zym in lsd:
         try:
             un_plug(shortname)
-            await eod(event, f"**Uɴɪɴsᴛᴀʟʟᴇᴅ** `{shortname}` **Sᴜᴄᴄᴇssғᴜʟʟʏ.**", time=3)
+            await event.eor(f"**Uninstalled** `{shortname}` **successfully.**", time=3)
             os.remove(f"addons/{shortname}.py")
-        except BaseException:
-            pass
-    elif zym in lst:
-        return await eod(event, "**Yᴏᴜ Cᴀɴ'ᴛ Uɴɪɴsᴛᴀʟʟ Oғғɪᴄɪᴀʟ Pʟᴜɢɪɴs**", time=3)
+        except Exception as ex:
+            return await event.eor(str(ex))
+    elif zym in os.listdir("plugins"):
+        return await event.eor(get_string("core_15"), time=3)
     else:
-        return await eod(event, f"**Nᴏ Pʟᴜɢɪɴ Nᴀᴍᴇᴅ** `{shortname}`", time=3)
+        return await event.eor(f"**No Plugin Named** `{shortname}`", time=3)
 
 
 @ultroid_cmd(
-    pattern=r"load ?(.*)",
+    pattern=r"load( (.*)|$)",
+    fullsudo=True,
 )
 async def load(event):
-    shortname = event.pattern_match.group(1)
+    shortname = event.pattern_match.group(1).strip()
     if not shortname:
-        await eor(event, "`Give name of plugin which u want to load`")
+        await event.eor(get_string("core_16"))
         return
     try:
         try:
             un_plug(shortname)
         except BaseException:
             pass
-        load_addons(shortname)
-        await eod(event, f"**Sᴜᴄᴄᴇssғᴜʟʟʏ Lᴏᴀᴅᴇᴅ** `{shortname}`", time=3)
+        load_addons(f"addons/{shortname}.py")
+        await event.eor(get_string("core_17").format(shortname), time=3)
     except Exception as e:
+        LOGS.exception(e)
         await eod(
             event,
-            f"**Could not load** `{shortname}` **because of the following error.**\n`{str(e)}`",
+            get_string("core_18").format(shortname, e),
             time=3,
         )
 
 
-HELP.update({f"{__name__.split('.')[1]}": f"{__doc__.format(i=Var.HNDLR)}"})
+@ultroid_cmd(pattern="getaddons( (.*)|$)", fullsudo=True)
+async def get_the_addons_lol(event):
+    thelink = event.pattern_match.group(1).strip()
+    xx = await event.eor(get_string("com_1"))
+    fool = get_string("gas_1")
+    if thelink is None:
+        return await xx.eor(fool, time=10)
+    split_thelink = thelink.split("/")
+    if not ("raw" in thelink and thelink.endswith(".py")):
+        return await xx.eor(fool, time=10)
+    name_of_it = split_thelink[-1]
+    plug = await async_searcher(thelink)
+    fil = f"addons/{name_of_it}"
+    await xx.edit("Packing the codes...")
+    with open(fil, "w", encoding="utf-8") as uult:
+        uult.write(plug)
+    await xx.edit("Packed. Now loading the plugin..")
+    shortname = name_of_it.split(".")[0]
+    try:
+        load_addons(fil)
+        await xx.eor(get_string("core_17").format(shortname), time=15)
+    except Exception as e:
+        LOGS.exception(e)
+        await eod(
+            xx,
+            get_string("core_18").format(shortname, e),
+            time=3,
+        )

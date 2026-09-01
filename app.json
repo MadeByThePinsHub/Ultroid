@@ -1,31 +1,31 @@
 {
     "name": "Ultroid UserBot",
     "description": "Pluggable telegram userbot, made in python using Telethon.",
-    "logo": "https://telegra.ph/file/1518e15421d21c5afd9af.jpg",
-    "keywords": ["Telethon", "telegram", "userbot", "python"],
+    "logo": "https://graph.org/file/031957757a4f6a5191040.jpg",
+    "keywords": [
+        "Telethon",
+        "telegram",
+        "userbot",
+        "python",
+        "ultroid"
+    ],
     "repository": "https://github.com/TeamUltroid/Ultroid",
-    "website": "https://ultroid.netlify.app/",
-    "success_url": "https://t.me/TheUltroid",
+    "website": "https://ultroid.tech",
+    "success_url": "https://t.me/TeamUltroid",
     "stack": "container",
     "env": {
         "API_ID": {
             "description": "You api id, from my.telegram.org or @ScrapperRoBot.",
-            "value": ""
+            "value": "", 
+            "required": false
         },
         "API_HASH": {
             "description": "You api hash, from my.telegram.org or @ScrapperRoBot.",
-            "value": ""
-        },
-        "BOT_USERNAME": {
-            "description": "Make a bot from @BotFather, and enter it's username here, with '@'",
-            "value": ""
-        },
-        "BOT_TOKEN": {
-            "description": "Make a bot from @BotFather, and enter it's api token here.",
-            "value": ""
+            "value": "",
+            "required": false
         },
         "SESSION": {
-            "description": "Your session string. Can be added now, or after deploy. (The bot will NOT work without a session string!!)",
+            "description": "Session String (telethon or pyrogram) for your telegram user account. The userbot will NOT work without a session string!!",
             "value": ""
         },
         "REDIS_URI": {
@@ -37,17 +37,20 @@
             "value": ""
         },
         "HEROKU_API": {
-            "description": "Heroku API token. Needed if deploying on heroku ONLY.",
+            "description": "Heroku API token. Mandatory for Heroku Deploy...",
             "value": "",
             "required": false
         },
         "HEROKU_APP_NAME": {
-            "description": "Name of your heroku app, given in the first blank on this page. To be added if deploying to heroku ONLY.",
-            "value": ""
-        },
-        "LOG_CHANNEL": {
-            "description": "Create a private group. Add @missrose_bot and your BOT_USERNAME bot. Do /id. Paste that here",
-             "value": ""
+            "description": "Name of your Heroku app, given in the first blank on this page. To be added if deploying to heroku ONLY.",
+            "value": "",
+            "required": false
+        }
+    },
+    "formation": {
+        "ultroid": {
+            "quantity": 1,
+            "size": "eco"
         }
     }
 }

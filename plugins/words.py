@@ -1,10 +1,9 @@
 # Ultroid - UserBot
-# Copyright (C) 2020 TeamUltroid
+# Copyright (C) 2021-2026 TeamUltroid
 #
 # This file is a part of < https://github.com/TeamUltroid/Ultroid/ >
 # PLease read the GNU Affero General Public License in
 # <https://www.github.com/TeamUltroid/Ultroid/blob/main/LICENSE/>.
-
 """
 ✘ Commands Available -
 
@@ -20,126 +19,97 @@
 • `{i}ud <word>`
     Fetch word defenition from urbandictionary.
 """
+import io
 
-import asyncurban
-from PyDictionary import PyDictionary
+from pyUltroid.fns.misc import get_synonyms_or_antonyms
+from pyUltroid.fns.tools import async_searcher
 
-from . import *
-
-dictionary = PyDictionary()
+from . import get_string, ultroid_cmd
 
 
-@ultroid_cmd(
-    pattern="meaning",
-)
+@ultroid_cmd(pattern="meaning( (.*)|$)", manager=True)
 async def mean(event):
-    evid = event.message.id
-    xx = await eor(event, "`Processing...`")
-    wrd = event.text.split(" ", maxsplit=1)[1]
-    ok = dictionary.meaning(wrd)
+    wrd = event.pattern_match.group(1).strip()
+    if not wrd:
+        return await event.eor(get_string("wrd_4"))
+    url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{wrd}"
+    out = await async_searcher(url, re_json=True)
     try:
-        p = ok["Noun"]
-    except BaseException:
-        return await xx.edit("Oops! No such word found!!")
-    x = f"**Word** - `{wrd}`\n\n**Meanings** - \n"
-    c = 1
-    for i in p:
-        x += f"**{c}.** `{i}`\n"
-        c += 1
-    if len(x) > 4096:
-        with io.BytesIO(str.encode(x)) as fle:
+        return await event.eor(f'**{out["title"]}**')
+    except (KeyError, TypeError):
+        pass
+    defi = out[0]["meanings"][0]["definitions"][0]
+    ex = defi["example"] if defi.get("example") else "None"
+    text = get_string("wrd_1").format(wrd, defi["definition"], ex)
+    if defi.get("synonyms"):
+        text += (
+            f"\n\n• **{get_string('wrd_5')} :**"
+            + "".join(f" {a}," for a in defi["synonyms"])[:-1][:10]
+        )
+    if defi.get("antonyms"):
+        text += (
+            f"\n\n**{get_string('wrd_6')} :**"
+            + "".join(f" {a}," for a in defi["antonyms"])[:-1][:10]
+        )
+    if len(text) > 4096:
+        with io.BytesIO(str.encode(text)) as fle:
             fle.name = f"{wrd}-meanings.txt"
-            await ultroid_bot.send_file(
-                event.chat_id,
-                out_file,
+            await event.reply(
+                file=fle,
                 force_document=True,
-                allow_cache=False,
                 caption=f"Meanings of {wrd}",
-                reply_to=evid,
             )
-            await xx.delete()
+            await event.delete()
     else:
-        await xx.edit(x)
+        await event.eor(text)
 
 
 @ultroid_cmd(
-    pattern="synonym",
+    pattern="(syno|anto)nym",
 )
 async def mean(event):
-    evid = event.message.id
-    xx = await eor(event, "`Processing...`")
-    wrd = event.text.split(" ", maxsplit=1)[1]
-    ok = dictionary.synonym(wrd)
-    x = f"**Word** - `{wrd}`\n\n**Synonyms** - \n"
-    c = 1
+    task = event.pattern_match.group(1) + "nyms"
     try:
-        for i in ok:
+        wrd = event.text.split(maxsplit=1)[1]
+    except IndexError:
+        return await event.eor("Give Something to search..")
+    try:
+        ok = await get_synonyms_or_antonyms(wrd, task)
+        x = get_string("wrd_2" if task == "synonyms" else "wrd_3").format(wrd)
+        for c, i in enumerate(ok, start=1):
             x += f"**{c}.** `{i}`\n"
-            c += 1
         if len(x) > 4096:
             with io.BytesIO(str.encode(x)) as fle:
-                fle.name = f"{wrd}-synonyms.txt"
-                await ultroid_bot.send_file(
+                fle.name = f"{wrd}-{task}.txt"
+                await event.client.send_file(
                     event.chat_id,
-                    out_file,
+                    fle,
                     force_document=True,
                     allow_cache=False,
-                    caption=f"Synonyms of {wrd}",
-                    reply_to=evid,
+                    caption=f"{task} of {wrd}",
+                    reply_to=event.reply_to_msg_id,
                 )
-                await xx.delete()
+                await event.delete()
         else:
-            await xx.edit(x)
+            await event.eor(x)
     except Exception as e:
-        await xx.edit(f"No synonym found!!\n{str(e)}")
-
-
-@ultroid_cmd(
-    pattern="antonym",
-)
-async def mean(event):
-    evid = event.message.id
-    xx = await eor(event, "`Processing...`")
-    wrd = event.text.split(" ", maxsplit=1)[1]
-    ok = dictionary.antonym(wrd)
-    x = f"**Word** - `{wrd}`\n\n**Antonyms** - \n"
-    c = 1
-    try:
-        for i in ok:
-            x += f"**{c}.** `{i}`\n"
-            c += 1
-        if len(x) > 4096:
-            with io.BytesIO(str.encode(x)) as fle:
-                fle.name = f"{wrd}-antonyms.txt"
-                await ultroid_bot.send_file(
-                    event.chat_id,
-                    out_file,
-                    force_document=True,
-                    allow_cache=False,
-                    caption=f"Antonyms of {wrd}",
-                    reply_to=evid,
-                )
-                await xx.delete()
-        else:
-            await xx.edit(x)
-    except Exception as e:
-        await xx.edit(f"No antonym found!!\n{str(e)}")
+        await event.eor(
+            get_string("wrd_7" if task == "synonyms" else "wrd_8").format(e)
+        )
 
 
 @ultroid_cmd(pattern="ud (.*)")
 async def _(event):
-    xx = await eor(event, "`Processing...`")
-    word = event.pattern_match.group(1)
-    if word is None:
-        return await xx.edit("`No word given!`")
-    urban = asyncurban.UrbanDictionary()
+    word = event.pattern_match.group(1).strip()
+    if not word:
+        return await event.eor(get_string("autopic_1"))
+    out = await async_searcher(
+        "http://api.urbandictionary.com/v0/define", params={"term": word}, re_json=True
+    )
     try:
-        mean = await urban.get_word(word)
-        await xx.edit(
-            f"**Text**: `{mean.word}`\n\n**Meaning**: `{mean.definition}`\n\n**Example**: __{mean.example}__"
-        )
-    except asyncurban.WordNotFoundError:
-        await xx.edit(f"**No result found for** `{word}`")
-
-
-HELP.update({f"{__name__.split('.')[1]}": f"{__doc__.format(i=Var.HNDLR)}"})
+        out = out["list"][0]
+    except IndexError:
+        return await event.eor(get_string("autopic_2").format(word))
+    await event.eor(
+        get_string("wrd_1").format(out["word"], out["definition"], out["example"]),
+    )

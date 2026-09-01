@@ -1,88 +1,79 @@
 # Ultroid - UserBot
-# Copyright (C) 2020 TeamUltroid
+# Copyright (C) 2021-2026 TeamUltroid
 #
 # This file is a part of < https://github.com/TeamUltroid/Ultroid/ >
 # PLease read the GNU Affero General Public License in
 # <https://www.github.com/TeamUltroid/Ultroid/blob/main/LICENSE/>.
 
+import asyncio
+import os
 import time
+from random import choice
+
+import requests
+from telethon import Button, events
+from telethon.tl import functions, types  # pylint:ignore
 
 from pyUltroid import *
-from pyUltroid.dB.core import *
-from pyUltroid.functions import *
-from pyUltroid.functions.all import *
-from pyUltroid.functions.google_image import googleimagesdownload
-from pyUltroid.functions.sudos import *
-from pyUltroid.utils import *
+from pyUltroid._misc._assistant import asst_cmd, callback, in_pattern
+from pyUltroid._misc._decorators import ultroid_cmd
+from pyUltroid._misc._wrappers import eod, eor
+from pyUltroid.dB import DEVLIST, ULTROID_IMAGES
+from pyUltroid.fns.helper import *
+from pyUltroid.fns.misc import *
+from pyUltroid.fns.tools import *
+from pyUltroid.startup._database import _BaseDatabase as Database
+from pyUltroid.version import __version__, ultroid_version
+from strings import get_help, get_string
+from catbox import CatboxUploader
 
-start_time = time.time()
-ultroid_version = "v0.0.1"
-OWNER_NAME = ultroid_bot.me.first_name
-OWNER_ID = ultroid_bot.me.id
-DEVLIST = [
-    "1259468938",
-    "1452145387",
-    "719195224",
-    "1318486004",
-    "1289422521",
-    "1322549723",
-    "611816596",
-    "1003250439",
-    "1152902819",
-    "716243352",
-    "1444249738",
-    "559661211",
-    "881536550",
-    "630654925",
+udB: Database
+
+Redis = udB.get_key
+con = TgConverter
+quotly = Quotly()
+OWNER_NAME = ultroid_bot.full_name
+OWNER_ID = ultroid_bot.uid
+
+ultroid_bot: UltroidClient
+asst: UltroidClient
+
+LOG_CHANNEL = udB.get_key("LOG_CHANNEL")
+
+
+def inline_pic():
+    INLINE_PIC = udB.get_key("INLINE_PIC")
+    if INLINE_PIC is None:
+        INLINE_PIC = choice(ULTROID_IMAGES)
+    elif INLINE_PIC == False:
+        INLINE_PIC = None
+    return INLINE_PIC
+
+
+Telegraph = telegraph_client()
+cat_uploader = CatboxUploader()
+
+upload_file = cat_uploader.upload_file
+
+List = []
+Dict = {}
+InlinePlugin = {}
+N = 0
+cmd = ultroid_cmd
+STUFF = {}
+
+# Chats, which needs to be ignore for some cases
+# Considerably, there can be many
+# Feel Free to Add Any other...
+
+NOSPAM_CHAT = [
+    -1001361294038,  # UltroidSupportChat
+    -1001387666944,  # PyrogramChat
+    -1001109500936,  # TelethonChat
+    -1001050982793,  # Python
+    -1001256902287,  # DurovsChat
+    -1001473548283,  # SharingUserbot
 ]
-
-# sudo
-ok = udB.get("SUDOS")
-if ok:
-    SUDO_USERS = set(int(x) for x in ok.split())
-else:
-    SUDO_USERS = ""
-
-if SUDO_USERS:
-    sudos = list(SUDO_USERS)
-else:
-    sudos = ""
-
-on = Var.SUDO
-
-if Var.SUDO:
-    sed = [ultroid_bot.uid, *sudos]
-else:
-    sed = [ultroid_bot.uid]
-
-
-def grt(seconds: int) -> str:
-    count = 0
-    up_time = ""
-    time_list = []
-    time_suffix_list = ["s", "m", "h", "days"]
-
-    while count < 4:
-        count += 1
-        if count < 3:
-            remainder, result = divmod(seconds, 60)
-        else:
-            remainder, result = divmod(seconds, 24)
-        if seconds == 0 and remainder == 0:
-            break
-        time_list.append(int(result))
-        seconds = int(remainder)
-
-    for x in range(len(time_list)):
-        time_list[x] = str(time_list[x]) + time_suffix_list[x]
-    if len(time_list) == 4:
-        up_time += time_list.pop() + ", "
-
-    time_list.reverse()
-    up_time += ":".join(time_list)
-
-    return up_time
-
 
 KANGING_STR = [
     "Using Witchery to kang this sticker...",
@@ -95,4 +86,20 @@ KANGING_STR = [
     "Roses are red violets are blue, kanging this sticker so my pack looks cool",
     "Imprisoning this sticker...",
     "Mr.Steal-Your-Sticker is stealing this sticker... ",
+]
+
+
+ATRA_COL = [
+    "DarkCyan",
+    "DeepSkyBlue",
+    "DarkTurquoise",
+    "Cyan",
+    "LightSkyBlue",
+    "Turquoise",
+    "MediumVioletRed",
+    "Aquamarine",
+    "Lightcyan",
+    "Azure",
+    "Moccasin",
+    "PowderBlue",
 ]

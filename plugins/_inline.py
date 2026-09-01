@@ -1,522 +1,455 @@
 # Ultroid - UserBot
-# Copyright (C) 2020 TeamUltroid
+# Copyright (C) 2021-2026 TeamUltroid
 #
 # This file is a part of < https://github.com/TeamUltroid/Ultroid/ >
 # PLease read the GNU Affero General Public License in
 # <https://www.github.com/TeamUltroid/Ultroid/blob/main/LICENSE/>.
 
-import os
-import random
 import re
 import time
 from datetime import datetime
-from math import ceil
-from platform import python_version as pyver
+from os import remove
 
 from git import Repo
-from support import *
-from telethon import Button, __version__
-from telethon.tl.types import InputWebDocument
+from telethon import Button
+from telethon.tl.types import InputWebDocument, Message
+from telethon.utils import resolve_bot_file_id
 
-from . import *
+from pyUltroid._misc._assistant import callback, in_pattern
+from pyUltroid.dB._core import HELP, LIST
+from pyUltroid.fns.helper import gen_chlog, time_formatter, updater
+from pyUltroid.fns.misc import split_list
+
+from . import (
+    HNDLR,
+    LOGS,
+    OWNER_NAME,
+    InlinePlugin,
+    asst,
+    get_string,
+    inline_pic,
+    split_list,
+    start_time,
+    udB,
+)
+from ._help import _main_help_menu
 
 # ================================================#
-notmine = "This bot is for {}".format(OWNER_NAME)
-ULTROID_PIC = "https://telegra.ph/file/11245cacbffe92e5d5b14.jpg"
-helps = """
-[Uʟᴛʀᴏɪᴅ Sᴜᴘᴘᴏʀᴛ](t.me/ultroidsupport)
 
-**Hᴇʟᴘ Mᴇɴᴜ Oғ {}.
+helps = get_string("inline_1")
 
-Pʟᴜɢɪɴs ~ {}**
-"""
+add_ons = udB.get_key("ADDONS")
 
-
-if Var.ADDONS:
-    zhelps = """
-[Uʟᴛʀᴏɪᴅ Sᴜᴘᴘᴏʀᴛ](t.me/ultroidsupport)
-
-**Hᴇʟᴘ Mᴇɴᴜ Oғ {}.
-
-Aᴅᴅᴏɴs ~ {}**
-"""
-else:
-    zhelps = """
-[Uʟᴛʀᴏɪᴅ Sᴜᴘᴘᴏʀᴛ](t.me/ultroidsupport)
-
-**Hᴇʟᴘ Mᴇɴᴜ Oғ {}.
-
-Aᴅᴅᴏɴs ~ {}
-
-Gᴏ Aɴᴅ Aᴅᴅ ADDON Vᴀʀ Wɪᴛʜ Vᴀʟᴜᴇ Tʀᴜᴇ**
-"""
+zhelps = get_string("inline_3") if add_ons is False else get_string("inline_2")
+PLUGINS = HELP.get("Official", [])
+ADDONS = HELP.get("Addons", [])
+upage = 0
 # ============================================#
 
+# --------------------BUTTONS--------------------#
 
-@inline
-@in_owner
-async def e(o):
-    if len(o.text) == 0:
-        b = o.builder
-        uptime = grt((time.time() - start_time))
-        ALIVEMSG = """
-**The Ultroid Userbot...**\n\n
-✵ **Owner** - `{}`
-✵ **Ultroid** - `{}`
-✵ **UpTime** - `{}`
-✵ **Python** - `{}`
-✵ **Telethon** - `{}`
-✵ **Branch** - `{}`
-""".format(
+SUP_BUTTONS = [
+    [
+        Button.url("• Repo •", url="https://github.com/TeamUltroid/Ultroid"),
+        Button.url("• Support •", url="t.me/UltroidSupportChat"),
+    ],
+]
+
+# --------------------BUTTONS--------------------#
+
+
+@in_pattern(owner=True, func=lambda x: not x.text)
+async def inline_alive(o):
+    TLINK = inline_pic() or "https://graph.org/file/74d6259983e0642923fdb.jpg"
+    MSG = "• **Ultroid Userbot •**"
+    WEB0 = InputWebDocument(
+        "https://graph.org/file/acd4f5d61369f74c5e7a7.jpg", 0, "image/jpg", []
+    )
+    RES = [
+        await o.builder.article(
+            type="photo",
+            text=MSG,
+            include_media=True,
+            buttons=SUP_BUTTONS,
+            title="Ultroid Userbot",
+            description="Userbot | Telethon",
+            url=TLINK,
+            thumb=WEB0,
+            content=InputWebDocument(TLINK, 0, "image/jpg", []),
+        )
+    ]
+    await o.answer(
+        RES,
+        private=True,
+        cache_time=300,
+        switch_pm="👥 ULTROID PORTAL",
+        switch_pm_param="start",
+    )
+
+
+@in_pattern("ultd", owner=True)
+async def inline_handler(event):
+    z = []
+    for x in LIST.values():
+        z.extend(x)
+    text = get_string("inline_4").format(
+        OWNER_NAME,
+        len(HELP.get("Official", [])),
+        len(HELP.get("Addons", [])),
+        len(z),
+    )
+    if inline_pic():
+        result = await event.builder.photo(
+            file=inline_pic(),
+            link_preview=False,
+            text=text,
+            buttons=_main_help_menu,
+        )
+    else:
+        result = await event.builder.article(
+            title="Ultroid Help Menu", text=text, buttons=_main_help_menu
+        )
+    await event.answer([result], private=True, cache_time=300, gallery=True)
+
+
+@in_pattern("pasta", owner=True)
+async def _(event):
+    ok = event.text.split("-")[1]
+    if not ok.startswith("http"):
+        link = f"https://spaceb.in/{ok}"
+        raw = f"https://spaceb.in/api/v1/documents/{ok}/raw"
+    else:
+        link = ok
+        raw = f"{ok}/raw"
+    result = await event.builder.article(
+        title="Paste",
+        text="Pasted to Spacebin 🌌",
+        buttons=[
+            [
+                Button.url("SpaceBin", url=link),
+                Button.url("Raw", url=raw),
+            ],
+        ],
+    )
+    await event.answer([result])
+
+
+@callback("ownr", owner=True)
+async def setting(event):
+    z = []
+    for x in LIST.values():
+        z.extend(x)
+    await event.edit(
+        get_string("inline_4").format(
             OWNER_NAME,
-            ultroid_version,
-            uptime,
-            pyver(),
-            __version__,
-            Repo().active_branch,
-        )
-        res = [
-            b.article(
-                title="Ultroid Userbot",
-                url="https://t.me/TeamUltroid",
-                description="Userbot | Telethon ",
-                text=ALIVEMSG,
-                thumb=InputWebDocument(ULTROID_PIC, 0, "image/jpeg", []),
-            )
-        ]
-        await o.answer(res, switch_pm=f"👥 ULTROID PORTAL", switch_pm_param="start")
-
-
-if Var.BOT_USERNAME is not None and asst is not None:
-
-    @inline
-    @in_owner
-    async def inline_handler(event):
-        builder = event.builder
-        result = None
-        query = event.text
-        if event.query.user_id in sed and query.startswith("ultd"):
-            result = builder.article(
-                title="Help Menu",
-                description="Help Menu - UserBot | Telethon ",
-                url="https://t.me/TheUltroid",
-                thumb=InputWebDocument(ULTROID_PIC, 0, "image/jpeg", []),
-                text=f"** Bᴏᴛ Oғ {OWNER_NAME}\n\nMᴀɪɴ Mᴇɴᴜ\n\nPʟᴜɢɪɴs ~ {len(PLUGINS) - 4}\nAᴅᴅᴏɴs ~ {len(ADDONS)}**",
-                buttons=[
-                    [
-                        Button.inline("• Pʟᴜɢɪɴs", data="hrrrr"),
-                        Button.inline("• Aᴅᴅᴏɴs", data="frrr"),
-                    ],
-                    [Button.inline("Oᴡɴᴇʀ•ᴛᴏᴏʟꜱ", data="ownr")],
-                    [Button.inline("Iɴʟɪɴᴇ•Pʟᴜɢɪɴs", data="inlone")],
-                    [Button.inline("••Cʟᴏꜱᴇ••", data="close")],
-                ],
-            )
-            await event.answer([result] if result else None)
-        elif event.query.user_id in sed and query.startswith("paste"):
-            ok = query.split("-")[1]
-            link = f"https://nekobin.com/{ok}"
-            link_raw = f"https://nekobin.com/raw/{ok}"
-            result = builder.article(
-                title="Paste",
-                text="Pᴀsᴛᴇᴅ Tᴏ Nᴇᴋᴏʙɪɴ!",
-                buttons=[
-                    [
-                        Button.url("NekoBin", url=f"{link}"),
-                        Button.url("Raw", url=f"{link_raw}"),
-                    ]
-                ],
-            )
-            await event.answer([result] if result else None)
-
-    @inline
-    @in_owner
-    @callback("ownr")
-    @owner
-    async def setting(event):
-        await event.edit(
-            buttons=[
-                [
-                    Button.inline("•Pɪɴɢ•", data="pkng"),
-                    Button.inline("•Uᴘᴛɪᴍᴇ•", data="upp"),
-                ],
-                [Button.inline("•Rᴇsᴛᴀʀᴛ•", data="rstrt")],
-                [Button.inline("<- Bᴀᴄᴋ", data="open")],
-            ],
-        )
-
-    @callback("pkng")
-    async def _(event):
-        start = datetime.now()
-        end = datetime.now()
-        ms = (end - start).microseconds / 1000
-        pin = f"🌋Pɪɴɢ = {ms}ms"
-        await event.answer(pin, cache_time=0, alert=True)
-
-    @callback("upp")
-    async def _(event):
-        uptime = grt((time.time() - start_time))
-        pin = f"🙋Uᴘᴛɪᴍᴇ = {uptime}"
-        await event.answer(pin, cache_time=0, alert=True)
-
-    @callback("inlone")
-    @owner
-    async def _(e):
-        button = [
+            len(HELP.get("Official", [])),
+            len(HELP.get("Addons", [])),
+            len(z),
+        ),
+        file=inline_pic(),
+        link_preview=False,
+        buttons=[
             [
-                Button.switch_inline(
-                    "Sᴇɴᴅ Oғғɪᴄɪᴀʟ Pʟᴜɢɪɴs",
-                    query="send all",
-                    same_peer=True,
-                )
+                Button.inline("•Pɪɴɢ•", data="pkng"),
+                Button.inline("•Uᴘᴛɪᴍᴇ•", data="upp"),
             ],
             [
-                Button.switch_inline(
-                    "Pʟᴀʏ Sᴛᴏʀᴇ Aᴘᴘs",
-                    query="app telegram",
-                    same_peer=True,
-                )
+                Button.inline("•Stats•", data="alive"),
+                Button.inline("•Uᴘᴅᴀᴛᴇ•", data="doupdate"),
             ],
-            [
-                Button.switch_inline(
-                    "Mᴏᴅᴅᴇᴅ Aᴘᴘs",
-                    query="mods minecraft",
-                    same_peer=True,
-                )
-            ],
-            [
-                Button.switch_inline(
-                    "Sᴇᴀʀᴄʜ Oɴ Gᴏᴏɢʟᴇ",
-                    query="go TeamUltroid",
-                    same_peer=True,
-                )
-            ],
-            [
-                Button.switch_inline(
-                    "Sᴇᴀʀᴄʜ Oɴ Yᴀʜᴏᴏ",
-                    query="yahoo TeamUltroid",
-                    same_peer=True,
-                )
-            ],
-            [
-                Button.switch_inline(
-                    "YᴏᴜTᴜʙᴇ Dᴏᴡɴʟᴏᴀᴅᴇʀ",
-                    query="yt How to Deploy Ultroid Userbot",
-                    same_peer=True,
-                )
-            ],
-            [
-                Button.switch_inline(
-                    "CʟɪᴘAʀᴛ Sᴇᴀʀᴄʜ",
-                    query="clipart frog",
-                    same_peer=True,
-                )
-            ],
+            [Button.inline("« Bᴀᴄᴋ", data="open")],
+        ],
+    )
+
+
+_strings = {"Official": helps, "Addons": zhelps, "VCBot": get_string("inline_6")}
+
+
+@callback(re.compile("uh_(.*)"), owner=True)
+async def help_func(ult):
+    key, count = ult.data_match.group(1).decode("utf-8").split("_")
+    if key == "VCBot" and HELP.get("VCBot") is None:
+        return await ult.answer(get_string("help_12"), alert=True)
+    elif key == "Addons" and HELP.get("Addons") is None:
+        return await ult.answer(get_string("help_13").format(HNDLR), alert=True)
+    if "|" in count:
+        _, count = count.split("|")
+    count = int(count) if count else 0
+    text = _strings.get(key, "").format(OWNER_NAME, len(HELP.get(key)))
+    await ult.edit(text, buttons=page_num(count, key), link_preview=False)
+
+
+@callback(re.compile("uplugin_(.*)"), owner=True)
+async def uptd_plugin(event):
+    key, file = event.data_match.group(1).decode("utf-8").split("_")
+    index = None
+    if "|" in file:
+        file, index = file.split("|")
+    key_ = HELP.get(key, [])
+    hel_p = f"Plugin Name - `{file}`\n"
+    help_ = ""
+    try:
+        for i in key_[file]:
+            help_ += i
+    except BaseException:
+        if file in LIST:
+            help_ = get_string("help_11").format(file)
+            for d in LIST[file]:
+                help_ += HNDLR + d
+                help_ += "\n"
+    if not help_:
+        help_ = f"{file} has no Detailed Help!"
+    help_ += "\n© @TeamUltroid"
+    buttons = []
+    if inline_pic():
+        data = f"sndplug_{key}_{file}"
+        if index is not None:
+            data += f"|{index}"
+        buttons.append(
             [
                 Button.inline(
-                    "<- Bᴀᴄᴋ",
-                    data="open",
+                    "« Sᴇɴᴅ Pʟᴜɢɪɴ »",
+                    data=data,
                 )
-            ],
+            ]
+        )
+    data = f"uh_{key}_"
+    if index is not None:
+        data += f"|{index}"
+    buttons.append(
+        [
+            Button.inline("« Bᴀᴄᴋ", data=data),
         ]
-        await e.edit(buttons=button, link_preview=False)
-
-    @callback("hrrrr")
-    @owner
-    async def on_plug_in_callback_query_handler(event):
-        xhelps = helps.format(OWNER_NAME, len(PLUGINS) - 4)
-        buttons = paginate_help(0, PLUGINS, "helpme")
-        await event.edit(f"{xhelps}", buttons=buttons, link_preview=False)
-
-    @callback("frrr")
-    @owner
-    async def addon(event):
-        halp = zhelps.format(OWNER_NAME, len(ADDONS))
-        if len(ADDONS) > 0:
-            buttons = paginate_addon(0, ADDONS, "addon")
-            await event.edit(f"{halp}", buttons=buttons, link_preview=False)
-        else:
-            await event.answer(
-                "• Iɴsᴛᴀʟʟ A Pʟᴜɢɪɴ Mᴀɴᴜᴀʟʟʏ Oʀ Aᴅᴅ Vᴀʀ ADDONS Wɪᴛʜ Vᴀʟᴜᴇ True",
-                cache_time=0,
-                alert=True,
-            )
-
-    @callback("rstrt")
-    @owner
-    async def rrst(ult):
-        await restart(ult)
-
-    @callback(
-        re.compile(
-            rb"helpme_next\((.+?)\)",
-        ),
     )
-    @owner
-    async def on_plug_in_callback_query_handler(event):
-        current_page_number = int(event.data_match.group(1).decode("UTF-8"))
-        buttons = paginate_help(current_page_number + 1, PLUGINS, "helpme")
-        await event.edit(buttons=buttons, link_preview=False)
+    try:
+        await event.edit(help_, buttons=buttons)
+    except Exception as er:
+        LOGS.exception(er)
+        help = f"Do `{HNDLR}help {key}` to get list of commands."
+        await event.edit(help, buttons=buttons)
 
-    @callback(
-        re.compile(
-            rb"helpme_prev\((.+?)\)",
-        ),
+
+@callback(data="doupdate", owner=True)
+async def _(event):
+    if not await updater():
+        return await event.answer(get_string("inline_9"), cache_time=0, alert=True)
+    if not inline_pic():
+        return await event.answer(f"Do '{HNDLR}update' to update..")
+    repo = Repo.init()
+    changelog, tl_chnglog = await gen_chlog(
+        repo, f"HEAD..upstream/{repo.active_branch}"
     )
-    @owner
-    async def on_plug_in_callback_query_handler(event):
-        current_page_number = int(event.data_match.group(1).decode("UTF-8"))
-        buttons = paginate_help(current_page_number - 1, PLUGINS, "helpme")
-        await event.edit(buttons=buttons, link_preview=False)
+    changelog_str = changelog + "\n\n" + get_string("inline_8")
+    if len(changelog_str) > 1024:
+        await event.edit(get_string("upd_4"))
+        with open("ultroid_updates.txt", "w+") as file:
+            file.write(tl_chnglog)
+        await event.edit(
+            get_string("upd_5"),
+            file="ultroid_updates.txt",
+            buttons=[
+                [Button.inline("• Uᴘᴅᴀᴛᴇ Nᴏᴡ •", data="updatenow")],
+                [Button.inline("« Bᴀᴄᴋ", data="ownr")],
+            ],
+        )
+        remove("ultroid_updates.txt")
+    else:
+        await event.edit(
+            changelog_str,
+            buttons=[
+                [Button.inline("Update Now", data="updatenow")],
+                [Button.inline("« Bᴀᴄᴋ", data="ownr")],
+            ],
+            parse_mode="html",
+        )
 
-    @callback(
-        re.compile(
-            rb"addon_next\((.+?)\)",
-        ),
+
+@callback(data="pkng", owner=True)
+async def _(event):
+    start = datetime.now()
+    end = datetime.now()
+    ms = (end - start).microseconds
+    pin = f"🌋Pɪɴɢ = {ms} microseconds"
+    await event.answer(pin, cache_time=0, alert=True)
+
+
+@callback(data="upp", owner=True)
+async def _(event):
+    uptime = time_formatter((time.time() - start_time) * 1000)
+    pin = f"🙋Uᴘᴛɪᴍᴇ = {uptime}"
+    await event.answer(pin, cache_time=0, alert=True)
+
+
+@callback(data="inlone", owner=True)
+async def _(e):
+    _InButtons = [
+        Button.switch_inline(_, query=InlinePlugin[_], same_peer=True)
+        for _ in list(InlinePlugin.keys())
+    ]
+    InButtons = split_list(_InButtons, 2)
+
+    button = InButtons.copy()
+    button.append(
+        [
+            Button.inline("« Bᴀᴄᴋ", data="open"),
+        ],
     )
-    @owner
-    async def on_plug_in_callback_query_handler(event):
-        current_page_number = int(event.data_match.group(1).decode("UTF-8"))
-        buttons = paginate_addon(current_page_number + 1, ADDONS, "addon")
-        await event.edit(buttons=buttons, link_preview=False)
+    await e.edit(buttons=button, link_preview=False)
 
-    @callback(
-        re.compile(
-            rb"addon_prev\((.+?)\)",
+
+@callback(data="open", owner=True)
+async def opner(event):
+    z = []
+    for x in LIST.values():
+        z.extend(x)
+    await event.edit(
+        get_string("inline_4").format(
+            OWNER_NAME,
+            len(HELP.get("Official", [])),
+            len(HELP.get("Addons", [])),
+            len(z),
         ),
+        buttons=_main_help_menu,
+        link_preview=False,
     )
-    @owner
-    async def on_plug_in_callback_query_handler(event):
-        current_page_number = int(event.data_match.group(1).decode("UTF-8"))
-        buttons = paginate_addon(current_page_number - 1, ADDONS, "addon")
-        await event.edit(buttons=buttons, link_preview=False)
 
-    @callback("back")
-    @owner
-    async def backr(event):
-        xhelps = helps.format(OWNER_NAME, len(PLUGINS) - 4)
-        current_page_number = int(upage)
-        buttons = paginate_help(current_page_number, PLUGINS, "helpme")
-        await event.edit(f"{xhelps}", buttons=buttons, link_preview=False)
 
-    @callback("buck")
-    @owner
-    async def backr(event):
-        xhelps = zhelps.format(OWNER_NAME, len(ADDONS))
-        current_page_number = int(addpage)
-        buttons = paginate_addon(current_page_number, ADDONS, "addon")
-        await event.edit(f"{xhelps}", buttons=buttons, link_preview=False)
+@callback(data="close", owner=True)
+async def on_plug_in_callback_query_handler(event):
+    await event.edit(
+        get_string("inline_5"),
+        buttons=Button.inline("Oᴘᴇɴ Aɢᴀɪɴ", data="open"),
+    )
 
-    @callback("open")
-    @owner
-    async def opner(event):
-        buttons = [
+
+def page_num(index, key):
+    rows = udB.get_key("HELP_ROWS") or 5
+    cols = udB.get_key("HELP_COLUMNS") or 2
+    loaded = HELP.get(key, [])
+    emoji = udB.get_key("EMOJI_IN_HELP") or "✘"
+    List = [
+        Button.inline(f"{emoji} {x} {emoji}", data=f"uplugin_{key}_{x}|{index}")
+        for x in sorted(loaded)
+    ]
+    all_ = split_list(List, cols)
+    fl_ = split_list(all_, rows)
+    try:
+        new_ = fl_[index]
+    except IndexError:
+        new_ = fl_[0] if fl_ else []
+        index = 0
+    if index == 0 and len(fl_) == 1:
+        new_.append([Button.inline("« Bᴀᴄᴋ »", data="open")])
+    else:
+        new_.append(
             [
-                Button.inline("• Pʟᴜɢɪɴs ", data="hrrrr"),
-                Button.inline("• Aᴅᴅᴏɴs", data="frrr"),
-            ],
-            [Button.inline("Oᴡɴᴇʀ•Tᴏᴏʟꜱ", data="ownr")],
-            [Button.inline("Iɴʟɪɴᴇ•Pʟᴜɢɪɴs", data="inlone")],
-            [Button.inline("••Cʟᴏꜱᴇ••", data="close")],
-        ]
-        await event.edit(
-            f"** Bᴏᴛ Oғ {OWNER_NAME}\n\nMᴀɪɴ Mᴇɴᴜ\n\nOꜰꜰɪᴄɪᴀʟ Pʟᴜɢɪɴs ~ {len(PLUGINS) - 4}\nUɴᴏꜰꜰɪᴄɪᴀʟ Pʟᴜɢɪɴs ~ {len(ADDONS)}**",
-            buttons=buttons,
-            link_preview=False,
+                Button.inline(
+                    "« Pʀᴇᴠɪᴏᴜs",
+                    data=f"uh_{key}_{index-1}",
+                ),
+                Button.inline("« Bᴀᴄᴋ »", data="open"),
+                Button.inline(
+                    "Nᴇxᴛ »",
+                    data=f"uh_{key}_{index+1}",
+                ),
+            ]
         )
+    return new_
 
-    @callback("close")
-    @owner
-    async def on_plug_in_callback_query_handler(event):
-        await event.edit(
-            "**Mᴇɴᴜ Hᴀs Bᴇᴇɴ Cʟᴏsᴇᴅ**",
-            buttons=Button.inline("Oᴘᴇɴ Mᴀɪɴ Mᴇɴᴜ Aɢᴀɪɴ", data="open"),
-        )
 
-    @callback(
-        re.compile(
-            b"us_plugin_(.*)",
-        ),
-    )
-    @owner
-    async def on_plug_in_callback_query_handler(event):
-        plugin_name = event.data_match.group(1).decode("UTF-8")
-        help_string = f"Plugin Name - `{plugin_name}`\n"
-        try:
-            for i in HELP[plugin_name]:
-                help_string += i
-        except BaseException:
-            pass
-        if help_string == "":
-            reply_pop_up_alert = "{} has no detailed help...".format(plugin_name)
-        else:
-            reply_pop_up_alert = help_string
-        reply_pop_up_alert += "\n© @TheUltroid"
-        try:
-            if event.query.user_id in sed:
-                await event.edit(
-                    reply_pop_up_alert,
-                    buttons=[
-                        Button.inline("<- Bᴀᴄᴋ", data="back"),
-                        Button.inline("••Cʟᴏꜱᴇ••", data="close"),
-                    ],
-                )
-            else:
-                reply_pop_up_alert = notmine
-                await event.answer(reply_pop_up_alert, cache_time=0)
-        except BaseException:
-            halps = "Do .help {} to get the list of commands.".format(plugin_name)
-            await event.edit(halps)
+# --------------------------------------------------------------------------------- #
 
-    @callback(
-        re.compile(
-            b"add_plugin_(.*)",
-        ),
-    )
-    @owner
-    async def on_plug_in_callback_query_handler(event):
-        plugin_name = event.data_match.group(1).decode("UTF-8")
-        help_string = ""
+
+STUFF = {}
+
+
+@in_pattern("stf(.*)", owner=True)
+async def ibuild(e):
+    n = e.pattern_match.group(1).strip()
+    builder = e.builder
+    if not (n and n.isdigit()):
+        return
+    ok = STUFF.get(int(n))
+    txt = ok.get("msg")
+    pic = ok.get("media")
+    btn = ok.get("button")
+    if not (pic or txt):
+        txt = "Hey!"
+    if pic:
         try:
-            for i in HELP[plugin_name]:
-                help_string += i
-        except BaseException:
+            include_media = True
+            mime_type, _pic = None, None
+            cont, results = None, None
             try:
-                for u in CMD_HELP[plugin_name]:
-                    help_string = (
-                        f"Plugin Name-{plugin_name}\n\n✘ Commands Available-\n\n"
-                    )
-                    help_string += str(CMD_HELP[plugin_name])
+                ext = str(pic).split(".")[-1].lower()
             except BaseException:
+                ext = None
+            if ext in ["img", "jpg", "png"]:
+                _type = "photo"
+                mime_type = "image/jpg"
+            elif ext in ["mp4", "mkv", "gif"]:
+                mime_type = "video/mp4"
+                _type = "gif"
+            else:
                 try:
-                    if plugin_name in LIST:
-                        help_string = (
-                            f"Plugin Name-{plugin_name}\n\n✘ Commands Available-\n\n"
-                        )
-                        for d in LIST[plugin_name]:
-                            help_string += Var.HNDLR + d
-                            help_string += "\n"
+                    if "telethon.tl.types" in str(type(pic)):
+                        _pic = pic
+                    else:
+                        _pic = resolve_bot_file_id(pic)
                 except BaseException:
                     pass
-        if help_string == "":
-            reply_pop_up_alert = "{} has no detailed help...".format(plugin_name)
-        else:
-            reply_pop_up_alert = help_string
-        reply_pop_up_alert += "\n© @TheUltroid"
-        try:
-            if event.query.user_id in sed:
-                await event.edit(
-                    reply_pop_up_alert,
-                    buttons=[
-                        Button.inline("<- Bᴀᴄᴋ", data="buck"),
-                        Button.inline("••Cʟᴏꜱᴇ••", data="close"),
-                    ],
-                )
-            else:
-                reply_pop_up_alert = notmine
-                await event.answer(reply_pop_up_alert, cache_time=0)
-        except BaseException:
-            halps = "Do .help {} to get the list of commands.".format(plugin_name)
-            await event.edit(halps)
-
-
-def paginate_help(page_number, loaded_plugins, prefix):
-    number_of_rows = 5
-    number_of_cols = 2
-    multi = os.environ.get("EMOJI_TO_DESPLAY_IN_HELP", "✘")
-    mult2i = os.environ.get("EMOJI2_TO_DESPLAY_IN_HELP", "✘")
-    helpable_plugins = []
-    global upage
-    upage = page_number
-    for p in loaded_plugins:
-        if not p.startswith("_"):
-            helpable_plugins.append(p)
-    helpable_plugins = sorted(helpable_plugins)
-    modules = [
-        Button.inline(
-            "{} {} {}".format(
-                random.choice(list(multi)), x, random.choice(list(mult2i))
-            ),
-            data="us_plugin_{}".format(x),
-        )
-        for x in helpable_plugins
+                if _pic:
+                    results = [
+                        await builder.document(
+                            _pic,
+                            title="Ultroid Op",
+                            text=txt,
+                            description="@TeamUltroid",
+                            buttons=btn,
+                            link_preview=False,
+                        )
+                    ]
+                else:
+                    _type = "article"
+                    include_media = False
+            if not results:
+                if include_media:
+                    cont = InputWebDocument(pic, 0, mime_type, [])
+                results = [
+                    await builder.article(
+                        title="Ultroid Op",
+                        type=_type,
+                        text=txt,
+                        description="@TeamUltroid",
+                        include_media=include_media,
+                        buttons=btn,
+                        thumb=cont,
+                        content=cont,
+                        link_preview=False,
+                    )
+                ]
+            return await e.answer(results)
+        except Exception as er:
+            LOGS.exception(er)
+    result = [
+        await builder.article("Ultroid Op", text=txt, link_preview=False, buttons=btn)
     ]
-    pairs = list(zip(modules[::number_of_cols], modules[1::number_of_cols]))
-    if len(modules) % number_of_cols == 1:
-        pairs.append((modules[-1],))
-    max_num_pages = ceil(len(pairs) / number_of_rows)
-    modulo_page = page_number % max_num_pages
-    if len(pairs) > number_of_rows:
-        pairs = pairs[
-            modulo_page * number_of_rows : number_of_rows * (modulo_page + 1)
-        ] + [
-            (
-                Button.inline(
-                    "<- Pʀᴇᴠɪᴏᴜs", data="{}_prev({})".format(prefix, modulo_page)
-                ),
-                Button.inline("-Bᴀᴄᴋ-", data="open"),
-                Button.inline(
-                    "Nᴇxᴛ ->", data="{}_next({})".format(prefix, modulo_page)
-                ),
-            )
-        ]
-    else:
-        pairs = pairs[
-            modulo_page * number_of_rows : number_of_rows * (modulo_page + 1)
-        ] + [
-            (
-                Button.inline("-Bᴀᴄᴋ-", data="open"),
-            )
-        ]
-    return pairs
+    await e.answer(result)
 
 
-def paginate_addon(page_number, loaded_plugins, prefix):
-    number_of_rows = 5
-    number_of_cols = 2
-    multi = os.environ.get("EMOJI_TO_DESPLAY_IN_HELP", "✘")
-    mult2i = os.environ.get("EMOJI2_TO_DESPLAY_IN_HELP", "✘")
-    helpable_plugins = []
-    global addpage
-    addpage = page_number
-    for p in loaded_plugins:
-        if not p.startswith("_"):
-            helpable_plugins.append(p)
-    helpable_plugins = sorted(helpable_plugins)
-    modules = [
-        Button.inline(
-            "{} {} {}".format(
-                random.choice(list(multi)), x, random.choice(list(mult2i))
-            ),
-            data="add_plugin_{}".format(x),
+async def something(e, msg, media, button, reply=True, chat=None):
+    if e.client._bot:
+        return await e.reply(msg, file=media, buttons=button)
+    num = len(STUFF) + 1
+    STUFF.update({num: {"msg": msg, "media": media, "button": button}})
+    try:
+        res = await e.client.inline_query(asst.me.username, f"stf{num}")
+        return await res[0].click(
+            chat or e.chat_id,
+            reply_to=bool(isinstance(e, Message) and reply),
+            hide_via=True,
+            silent=True,
         )
-        for x in helpable_plugins
-    ]
-    pairs = list(zip(modules[::number_of_cols], modules[1::number_of_cols]))
-    if len(modules) % number_of_cols == 1:
-        pairs.append((modules[-1],))
-    max_num_pages = ceil(len(pairs) / number_of_rows)
-    modulo_page = page_number % max_num_pages
-    if len(pairs) > number_of_rows:
-        pairs = pairs[
-            modulo_page * number_of_rows : number_of_rows * (modulo_page + 1)
-        ] + [
-            (
-                Button.inline(
-                    "<- Pʀᴇᴠɪᴏᴜs", data="{}_prev({})".format(prefix, modulo_page)
-                ),
-                Button.inline("-Bᴀᴄᴋ-", data="open"),
-                Button.inline(
-                    "Nᴇxᴛ ->", data="{}_next({})".format(prefix, modulo_page)
-                ),
-            )
-        ]
-    else:
-        pairs = pairs[
-            modulo_page * number_of_rows : number_of_rows * (modulo_page + 1)
-        ] + [
-            (
-                Button.inline("-Bᴀᴄᴋ-", data="open"),
-            )
-        ]
-    return pairs
+
+    except Exception as er:
+        LOGS.exception(er)

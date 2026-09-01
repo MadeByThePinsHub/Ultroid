@@ -1,252 +1,165 @@
 # Ultroid - UserBot
-# Copyright (C) 2020 TeamUltroid
+# Copyright (C) 2021-2026 TeamUltroid
 #
 # This file is a part of < https://github.com/TeamUltroid/Ultroid/ >
 # PLease read the GNU Affero General Public License in
 # <https://www.github.com/TeamUltroid/Ultroid/blob/main/LICENSE/>.
 
-"""
-✘ Commands Available -
+from . import get_help
 
-• `{i}afk <optional reason>`
-    afk means away from keyboard,
-    After u active this if Someting tag or msg u then It auto Reply Him/her,
-    (Note : By Reply To any media U can set media afk too).
+__doc__ = get_help("help_afk")
 
-"""
 
 import asyncio
-from datetime import datetime
 
 from telethon import events
-from telethon.tl import functions, types
 
-from . import *
+from pyUltroid.dB.afk_db import add_afk, del_afk, is_afk
+from pyUltroid.dB.base import KeyManager
 
-global USER_AFK
-global afk_time
-global last_afk_message
-global last_afk_msg
-global afk_start
-global afk_end
-USER_AFK = {}
-afk_time = None
-last_afk_message = {}
-last_afk_msg = {}
-afk_start = {}
-
-LOG = Var.LOG_CHANNEL
-
-
-@ultroid_bot.on(events.NewMessage(outgoing=True))
-@ultroid_bot.on(events.MessageEdited(outgoing=True))
-async def set_not_afk(event):
-    global USER_AFK
-    global afk_time
-    global last_afk_message
-    global afk_start
-    global afk_end
-    back_alive = datetime.now()
-    afk_end = back_alive.replace(microsecond=0)
-    if afk_start != {}:
-        total_afk_time = str((afk_end - afk_start))
-    current_message = event.message.message
-    if "afk" not in current_message and "yes" in USER_AFK:
-        try:
-            if pic.endswith((".tgs", ".webp")):
-                shite = await ultroid_bot.send_message(event.chat_id, file=pic)
-                shites = await ultroid_bot.send_message(
-                    event.chat_id,
-                    "`No Longer Afk`\n\nWas afk for~ " + total_afk_time + "`",
-                )
-            else:
-                shite = await ultroid_bot.send_message(
-                    event.chat_id,
-                    "`No Longer Afk`\n\nWas afk for~ " + total_afk_time + "`",
-                    file=pic,
-                )
-        except BaseException:
-            shite = await ultroid_bot.send_message(
-                event.chat_id, "`No Longer Afk \nWas afk for " + total_afk_time + "`"
-            )
-        try:
-            try:
-                if pic.endswith((".tgs", ".webp")):
-                    await ultroid_bot.send_message(LOG, file=pic)
-                    await ultroid_bot.send_message(
-                        LOG,
-                        "#AFKFALSE \nSet AFK mode to False\n"
-                        + "Back alive!\nNo Longer afk.\n Was afk for`"
-                        + total_afk_time
-                        + "`",
-                    )
-                else:
-                    await ultroid_bot.send_message(
-                        LOG,
-                        "#AFKFALSE \nSet AFK mode to False\n"
-                        + "Back alive!\nNo Longer afk.\n Was afk for`"
-                        + total_afk_time
-                        + "`",
-                        file=pic,
-                    )
-            except BaseException:
-                await ultroid_bot.send_message(
-                    LOG,
-                    "#AFKFALSE \nSet AFK mode to False\n"
-                    + "Back alive!\nNo Longer afk.\n Was afk for`"
-                    + total_afk_time
-                    + "`",
-                )
-        except BaseException:
-            pass
-        await asyncio.sleep(3)
-        await shite.delete()
-        try:
-            await shites.delete()
-        except BaseException:
-            pass
-        USER_AFK = {}
-        afk_time = None
-
-
-@ultroid_bot.on(
-    events.NewMessage(incoming=True, func=lambda e: bool(e.mentioned or e.is_private))
+from . import (
+    LOG_CHANNEL,
+    NOSPAM_CHAT,
+    Redis,
+    asst,
+    get_string,
+    mediainfo,
+    udB,
+    ultroid_bot,
+    ultroid_cmd,
+    upload_file
 )
-async def on_afk(event):
-    if event.fwd_from:
+
+old_afk_msg = []
+
+is_approved = KeyManager("PMPERMIT", cast=list).contains
+
+
+@ultroid_cmd(pattern="afk( (.*)|$)", owner_only=True)
+async def set_afk(event):
+    if event.client._bot or is_afk():
         return
-    global USER_AFK
-    global afk_time
-    global last_afk_message
-    global afk_start
-    global afk_end
-    back_alivee = datetime.now()
-    afk_end = back_alivee.replace(microsecond=0)
-    if afk_start != {}:
-        total_afk_time = str((afk_end - afk_start))
-    current_message_text = event.message.message.lower()
-    if "afk" in current_message_text:
-        return False
-    if USER_AFK and not (await event.get_sender()).bot:
-        msg = None
-        if reason:
-            message_to_reply = (
-                f"__Master #AFK since__ `{total_afk_time}`\n\n"
-                + f"__"
-                + f"\n\n**Reason:- `**{reason}`"
+    text, media, media_type = None, None, None
+    if event.pattern_match.group(1).strip():
+        text = event.text.split(maxsplit=1)[1]
+    reply = await event.get_reply_message()
+    if reply:
+        if reply.text and not text:
+            text = reply.text
+        if reply.media:
+            media_type = mediainfo(reply.media)
+            if media_type.startswith(("pic", "gif")):
+                file = await event.client.download_media(reply.media)
+                media = upload_file(file)
+            else:
+                media = reply.file.id
+    await event.eor("`Done`", time=2)
+    add_afk(text, media_type, media)
+    ultroid_bot.add_handler(remove_afk, events.NewMessage(outgoing=True))
+    ultroid_bot.add_handler(
+        on_afk,
+        events.NewMessage(
+            incoming=True, func=lambda e: bool(e.mentioned or e.is_private)
+        ),
+    )
+    msg1, msg2 = None, None
+    if text and media:
+        if "sticker" in media_type:
+            msg1 = await ultroid_bot.send_file(event.chat_id, file=media)
+            msg2 = await ultroid_bot.send_message(
+                event.chat_id, get_string("afk_5").format(text)
             )
         else:
-            message_to_reply = f"__Master #AFK since__ `{total_afk_time}`\n\n" + f"__"
-        try:
-            if pic.endswith((".tgs", ".webp")):
-                msg = await event.reply(file=pic)
-                msgs = await event.reply(message_to_reply)
-            else:
-                msg = await event.reply(message_to_reply, file=pic)
-        except BaseException:
-            msg = await event.reply(message_to_reply)
-        await asyncio.sleep(2.5)
-        if event.chat_id in last_afk_message:
-            await last_afk_message[event.chat_id].delete()
-        try:
-            if event.chat_id in last_afk_msg:
-                await last_afk_msg[event.chat_id].delete()
-        except BaseException:
-            pass
-        last_afk_message[event.chat_id] = msg
-        try:
-            if msgs:
-                last_afk_msg[event.chat_id] = msgs
-        except BaseException:
-            pass
-
-
-@ultroid_cmd(pattern=r"afk ?(.*)")
-async def _(event):
-    if event.fwd_from:
-        return
-    reply = await event.get_reply_message()
-    global USER_AFK
-    global afk_time
-    global last_afk_message
-    global last_afk_msg
-    global afk_start
-    global afk_end
-    global reason
-    global pic
-    USER_AFK = {}
-    afk_time = None
-    last_afk_message = {}
-    last_afk_msg = {}
-    afk_end = {}
-    start_1 = datetime.now()
-    afk_start = start_1.replace(microsecond=0)
-    reason = event.pattern_match.group(1)
-    if reply:
-        pic = await event.client.download_media(reply)
-    else:
-        pic = None
-    if not USER_AFK:
-        last_seen_status = await ultroid_bot(
-            functions.account.GetPrivacyRequest(types.InputPrivacyKeyStatusTimestamp())
-        )
-        if isinstance(last_seen_status.rules, types.PrivacyValueAllowAll):
-            afk_time = datetime.datetime.now()
-        USER_AFK = f"yes: {reason} {pic}"
-        if reason:
-            try:
-                if pic.endswith((".tgs", ".webp")):
-                    await ultroid_bot.send_message(event.chat_id, file=pic)
-                    await ultroid_bot.send_message(
-                        event.chat_id, f"Afk __because ~ {reason}__"
-                    )
-                else:
-                    await ultroid_bot.send_message(
-                        event.chat_id, f"Afk __because ~ {reason}__", file=pic
-                    )
-            except BaseException:
-                await ultroid_bot.send_message(
-                    event.chat_id, f"Afk __because ~ {reason}__"
-                )
+            msg1 = await ultroid_bot.send_message(
+                event.chat_id, get_string("afk_5").format(text), file=media
+            )
+    elif media:
+        if "sticker" in media_type:
+            msg1 = await ultroid_bot.send_file(event.chat_id, file=media)
+            msg2 = await ultroid_bot.send_message(event.chat_id, get_string("afk_6"))
         else:
+            msg1 = await ultroid_bot.send_message(
+                event.chat_id, get_string("afk_6"), file=media
+            )
+    elif text:
+        msg1 = await event.respond(get_string("afk_5").format(text))
+    else:
+        msg1 = await event.respond(get_string("afk_6"))
+    old_afk_msg.append(msg1)
+    if msg2:
+        old_afk_msg.append(msg2)
+        return await asst.send_message(LOG_CHANNEL, msg2.text)
+    await asst.send_message(LOG_CHANNEL, msg1.text)
+
+
+async def remove_afk(event):
+    if event.is_private and udB.get_key("PMSETTING") and not is_approved(event.chat_id):
+        return
+    elif "afk" in event.text.lower():
+        return
+    elif event.chat_id in NOSPAM_CHAT:
+        return
+    if is_afk():
+        _, _, _, afk_time = is_afk()
+        del_afk()
+        off = await event.reply(get_string("afk_1").format(afk_time))
+        await asst.send_message(LOG_CHANNEL, get_string("afk_2").format(afk_time))
+        for x in old_afk_msg:
             try:
-                if pic.endswith((".tgs", ".webp")):
-                    await ultroid_bot.send_message(event.chat_id, file=pic)
-                    await ultroid_bot.send_message(
-                        event.chat_id, f"**I am Going afk!**"
-                    )
-                else:
-                    await ultroid_bot.send_message(
-                        event.chat_id, f"**I am Going afk!**", file=pic
-                    )
+                await x.delete()
             except BaseException:
-                await ultroid_bot.send_message(event.chat_id, f"**I am Going afk!**")
-        await event.delete()
+                pass
+        await asyncio.sleep(10)
+        await off.delete()
+
+
+async def on_afk(event):
+    if event.is_private and Redis("PMSETTING") and not is_approved(event.chat_id):
+        return
+    elif "afk" in event.text.lower():
+        return
+    elif not is_afk():
+        return
+    if event.chat_id in NOSPAM_CHAT:
+        return
+    sender = await event.get_sender()
+    if sender.bot or sender.verified:
+        return
+    text, media_type, media, afk_time = is_afk()
+    msg1, msg2 = None, None
+    if text and media:
+        if "sticker" in media_type:
+            msg1 = await event.reply(file=media)
+            msg2 = await event.reply(get_string("afk_3").format(afk_time, text))
+        else:
+            msg1 = await event.reply(
+                get_string("afk_3").format(afk_time, text), file=media
+            )
+    elif media:
+        if "sticker" in media_type:
+            msg1 = await event.reply(file=media)
+            msg2 = await event.reply(get_string("afk_4").format(afk_time))
+        else:
+            msg1 = await event.reply(get_string("afk_4").format(afk_time), file=media)
+    elif text:
+        msg1 = await event.reply(get_string("afk_3").format(afk_time, text))
+    else:
+        msg1 = await event.reply(get_string("afk_4").format(afk_time))
+    for x in old_afk_msg:
         try:
-            if reason and pic:
-                if pic.endswith((".tgs", ".webp")):
-                    await ultroid_bot.send_message(LOG, file=pic)
-                    await ultroid_bot.send_message(
-                        LOG, f"AFK mode to On and Reason is {reason}"
-                    )
-                else:
-                    await ultroid_bot.send_message(
-                        LOG, f"AFK mode to On and Reason is {reason}", file=pic
-                    )
-            elif reason:
-                await ultroid_bot.send_message(
-                    LOG, f"AFK mode to On and Reason is {reason}"
-                )
-            elif pic:
-                if pic.endswith((".tgs", ".webp")):
-                    await ultroid_bot.send_message(LOG, file=pic)
-                    await ultroid_bot.send_message(LOG, f"AFK mode to On")
-                else:
-                    await ultroid_bot.send_message(LOG, f"AFK mode to On", file=pic)
-            else:
-                await ultroid_bot.send_message(LOG, f"AFK mode to On")
-        except Exception as e:
-            logger.warn(str(e))
+            await x.delete()
+        except BaseException:
+            pass
+    old_afk_msg.append(msg1)
+    if msg2:
+        old_afk_msg.append(msg2)
 
 
-HELP.update({f"{__name__.split('.')[1]}": f"{__doc__.format(i=Var.HNDLR)}"})
+if udB.get_key("AFK_DB"):
+    ultroid_bot.add_handler(remove_afk, events.NewMessage(outgoing=True))
+    ultroid_bot.add_handler(
+        on_afk,
+        events.NewMessage(
+            incoming=True, func=lambda e: bool(e.mentioned or e.is_private)
+        ),
+    )
